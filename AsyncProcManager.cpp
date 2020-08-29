@@ -38,7 +38,7 @@ void AsyncProcManager::Startup(void)
 {
 	printf("AsyncProcManager::Startup...\n");
 #if defined(__WINDOWS__)
-	HANDLE h = CreateThread (NULL, 0, ThreadProc, (PVOID)this, 0, &m_tid);
+	m_hThread = CreateThread (NULL, 0, ThreadProc, (PVOID)this, 0, &m_tid);
 #elif defined(__LINUX__)
 	pthread_create(&m_tid, NULL, ThreadProc, (void*)this); 
 #endif	
@@ -67,6 +67,16 @@ void AsyncProcManager::Shutdown(void)
 	pthread_join(m_tid, NULL);
 #endif
 	printf("AsyncProcManager::Shutdown...OK.\n");
+}
+
+void AsyncProcManager::Terminate(void)
+{
+	printf("AsyncProcManager::Terminate...\n");
+#if defined(__WINDOWS__)
+	TerminateThread(m_hThread, 0);
+#elif defined(__LINUX__)
+	pthread_cancel(m_tid);
+#endif	
 }
 
 void AsyncProcManager::Tick()
@@ -130,10 +140,8 @@ void AsyncProcManager::_ThreadStart()
 	m_state = State_Running;
 	_UnlockQueue();
 
-	while(1)
+	while(true)
 	{
-		_ThreadCycle();
-
 		bool stopping = false;
 		_LockQueue();
 		stopping = (m_state == State_Stopping);
@@ -141,6 +149,8 @@ void AsyncProcManager::_ThreadStart()
 
 		if(stopping)
 			return;
+
+		_ThreadCycle();
 	}
 }
 

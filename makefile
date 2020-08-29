@@ -10,3 +10,7 @@ demo.o: demo.c
 	
 AsyncProcManager.o: AsyncProcManager.cpp
 	g++ $(CPPFLAGS) -c AsyncProcManager.cpp
+
+clean:
+	rm -f *.o
+	rm -f demo
