@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <assert.h>
 
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 DWORD WINAPI AsyncProcThread::ThreadFunc (PVOID arg)
 #elif defined(__LINUX__)
 void* AsyncProcThread::ThreadFunc(void* arg)
@@ -13,11 +13,12 @@ void* AsyncProcThread::ThreadFunc(void* arg)
 	return 0;
 }
 
-AsyncProcThread::AsyncProcThread()
-	: m_count(0)
+AsyncProcThread::AsyncProcThread(int customID)
+	: m_customID(customID)
+	, m_count(0)
 	, m_state(State_None)
 {
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 	InitializeCriticalSection(&m_queueLock);
 	InitializeConditionVariable(&m_awakeCondition);
 	m_hThread = INVALID_HANDLE_VALUE;
@@ -29,14 +30,12 @@ AsyncProcThread::AsyncProcThread()
 
 AsyncProcThread::~AsyncProcThread()
 {
-	printf("AsyncProcThread::~AsyncProcThread\n");
-
 	_GetLock();
 	if(m_state != State_None)
 		Shutdown();
 	_ReleaseLock();	
 
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 	DeleteCriticalSection(&m_queueLock);
 #elif defined(__LINUX__)
 	pthread_mutex_destroy(&m_queueLock);
@@ -46,12 +45,11 @@ AsyncProcThread::~AsyncProcThread()
 
 bool AsyncProcThread::Startup(void)
 {
-	printf("AsyncProcThread::Startup...\n");
 	_GetLock();
 	assert(State_None == m_state);
 
 	bool ret = false;
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 	m_hThread = CreateThread (NULL, 0, ThreadFunc, (PVOID)this, 0, &m_tid);
 	ret = (m_hThread != NULL);
 #elif defined(__LINUX__)
@@ -61,12 +59,12 @@ bool AsyncProcThread::Startup(void)
 	if(ret)
 	{
 		m_state = State_Running;
-		printf("AsyncProcThread::Startup...OK\n");	
+		printf("AsyncProcThread::Startup...OK: %d\n", m_customID);	
 	}
 	else
 	{
 		m_state = State_None;
-		printf("AsyncProcThread::Startup...Failed\n");	
+		printf("AsyncProcThread::Startup...Failed: %d\n", m_customID);	
 	}
 		
 	_ReleaseLock();	
@@ -82,7 +80,9 @@ void AsyncProcThread::Enqueue(AsyncProc* proc)
 
 	if(m_state == State_Sleeping)
 	{
-#if defined(__WINDOWS__)
+		printf("AsyncProcThread::Enqueue...Awake %d\n", m_customID);
+		
+#if defined(_WIN32) || defined(_WIN64)
 		WakeConditionVariable (&m_awakeCondition);
 #elif defined(__LINUX__)
 		pthread_cond_signal(&m_awakeCondition); 
@@ -95,14 +95,16 @@ void AsyncProcThread::Enqueue(AsyncProc* proc)
 
 void AsyncProcThread::Shutdown(void)
 {
-	printf("AsyncProcThread::Shutdown...\n");
+	printf("AsyncProcThread::Shutdown...Begin %d\n", m_customID);
 
 	_GetLock();
 	assert(m_state != State_None);
 
 	if(m_state == State_Sleeping)
 	{
-#if defined(__WINDOWS__)
+		printf("AsyncProcThread::Shutdown...Awake %d\n", m_customID);
+
+#if defined(_WIN32) || defined(_WIN64)
 		WakeConditionVariable (&m_awakeCondition);
 #elif defined(__LINUX__)
 		pthread_cond_signal(&m_awakeCondition); 
@@ -111,7 +113,8 @@ void AsyncProcThread::Shutdown(void)
 	m_state = State_Stopping;
 	_ReleaseLock();
 
-#if defined(__WINDOWS__)
+	printf("AsyncProcThread::Shutdown...Wait: %d\n", m_customID);
+#if defined(_WIN32) || defined(_WIN64)
 	WaitForSingleObject(m_hThread, INFINITE);
 	m_hThread = INVALID_HANDLE_VALUE;
 #elif defined(__LINUX__)
@@ -122,17 +125,17 @@ void AsyncProcThread::Shutdown(void)
 	m_state = State_None;
 	_ReleaseLock();
 
-	printf("AsyncProcThread::Shutdown...OK\n");
+	printf("AsyncProcThread::Shutdown...OK: %d\n", m_customID);
 }
 
 void AsyncProcThread::Terminate(void)
 {	
-	printf("AsyncProcThread::Terminate...\n");
+	printf("AsyncProcThread::Terminate...: %d\n", m_customID);
 
 	_GetLock();
 	assert(m_state != State_None);
 
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 	TerminateThread(m_hThread, 0);
 #elif defined(__LINUX__)
 	pthread_cancel(m_tid);
@@ -140,7 +143,7 @@ void AsyncProcThread::Terminate(void)
 
 	m_state = State_None;
 	_ReleaseLock();
-	printf("AsyncProcThread::Terminate...OK\n");
+	printf("AsyncProcThread::Terminate...OK: %d\n", m_customID);
 }
 
 void AsyncProcThread::CallbackTick()
@@ -180,12 +183,12 @@ void AsyncProcThread::_ThreadStart()
 {
 	while(true)
 	{
+		_ThreadCycle();
+
 		_GetLock();
 		if(m_state == State_Stopping)
 			break;
-
 		_ReleaseLock();	
-		_ThreadCycle();
 	}
 		
 	_ReleaseLock();	
@@ -213,10 +216,12 @@ void AsyncProcThread::_ThreadCycle()
 	}
 
 	_GetLock();
-	if(m_waitQueue.size() == 0)
+	if(m_waitQueue.size() == 0 && State_Running == m_state)
 	{
+		printf("AsyncProcThread::_ThreadCycle...Sleep %d\n", m_customID);
+
 		m_state = State_Sleeping;
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 		SleepConditionVariableCS (&m_awakeCondition, &m_queueLock, INFINITE);
 #elif defined(__LINUX__)
 		pthread_cond_wait(&m_awakeCondition, &m_queueLock); 
@@ -227,7 +232,7 @@ void AsyncProcThread::_ThreadCycle()
 
 void AsyncProcThread::_GetLock()
 {
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 	EnterCriticalSection(&m_queueLock);
 #elif defined(__LINUX__)
 	pthread_mutex_lock(&m_queueLock);
@@ -236,7 +241,7 @@ void AsyncProcThread::_GetLock()
 
 void AsyncProcThread::_ReleaseLock()
 {
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 	LeaveCriticalSection(&m_queueLock);
 #elif defined(__LINUX__)
 	pthread_mutex_unlock(&m_queueLock);

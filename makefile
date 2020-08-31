@@ -5,8 +5,8 @@ LDLIBS = -lThread
 demo: demo.o AsyncProcManager.o AsyncProcThread.o
 	g++ $(LDFLAGS) -o demo demo.o AsyncProcManager.o AsyncProcThread.o
 
-demo.o: demo.c
-	g++ $(CPPFLAGS) -c demo.c
+demo.o: demo.cpp
+	g++ $(CPPFLAGS) -c demo.cpp
 	
 AsyncProcManager.o: AsyncProcManager.cpp
 	g++ $(CPPFLAGS) -c AsyncProcManager.cpp

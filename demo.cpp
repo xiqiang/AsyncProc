@@ -1,10 +1,18 @@
+
+
+#include <cstdio> 
+#include <stdlib.h> 
+#if defined(_WIN32) || defined(_WIN64)
+
+#elif defined(__LINUX__)
 #include <pthread.h> 
-#include <stdio.h> 
 #include <unistd.h> 
+#endif
+
 #include "AsyncProcManager.h"
 #include "demoProc.h"
 
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 	CRITICAL_SECTION cycleLock;
 	DWORD cycleThreadId;
 	HANDLE cycleHandle;
@@ -15,8 +23,9 @@
 
 AsyncProcManager apm;
 bool alive;
+int procIndex = 0;
 
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 DWORD WINAPI CycleThreadProc(PVOID arg)
 #elif defined(__LINUX__)
 void* CycleThreadProc(void* arg)
@@ -32,7 +41,7 @@ void* CycleThreadProc(void* arg)
 
 int main() 
 { 
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 	InitializeCriticalSection(&cycleLock);
 	cycleHandle = CreateThread (NULL, 0, CycleThreadProc, NULL, 0, &cycleThreadId);
 #elif defined(__LINUX__)
@@ -49,7 +58,7 @@ int main()
 			case 'q':			
 				apm.Shutdown();
 				alive = false;
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 				WaitForSingleObject(cycleHandle, INFINITE);
 #elif defined(__LINUX__)
 				pthread_join(cycleThreadId, NULL);
@@ -57,14 +66,18 @@ int main()
 				break;
 			case 's':
 				{
-					int threadIndex = apm.Enqueue(new SleepProc(5));
-					printf("enqued index:%d\n", threadIndex);
+					for(int i = 0; i < rand() % 100; ++i) {
+						SleepProc* proc = new SleepProc(rand() % 10000);
+						int threadIndex = apm.Enqueue(proc);
+						proc->SetThreadIndex(threadIndex);
+						proc->SetProcIndex(procIndex++);
+					}
 				}
 				break;
 			case 't':
 				apm.Terminate();
 				alive = false;
-#if defined(__WINDOWS__)
+#if defined(_WIN32) || defined(_WIN64)
 				WaitForSingleObject(cycleHandle, INFINITE);
 #elif defined(__LINUX__)
 				pthread_join(cycleThreadId, NULL);
@@ -73,5 +86,6 @@ int main()
 		}
 	}
 
+	printf("main exit.\n");
 	return 0; 
-} 
+}

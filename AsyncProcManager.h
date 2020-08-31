@@ -20,7 +20,17 @@ public:
 	size_t GetProcCount(void);
 
 private:
+	void _GetLock();
+	void _ReleaseLock();
+
+private:
 	std::vector<AsyncProcThread*> m_threads;
+
+#if defined(_WIN32) || defined(_WIN64)
+	CRITICAL_SECTION m_queueLock;
+#elif defined(__LINUX__)
+	pthread_mutex_t m_queueLock;
+#endif
 };
 
 #endif
