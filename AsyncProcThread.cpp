@@ -143,6 +143,8 @@ void AsyncProcThread::Terminate(void)
 
 	m_state = State_None;
 	_ReleaseLock();
+	_ClearAllQueue();
+	
 	printf("AsyncProcThread::Terminate...OK: %d\n", m_customID);
 }
 
@@ -226,6 +228,35 @@ void AsyncProcThread::_ThreadCycle()
 #elif defined(__LINUX__)
 		pthread_cond_wait(&m_awakeCondition, &m_queueLock); 
 #endif					
+	}
+	_ReleaseLock();
+}
+	
+void AsyncProcThread::_ClearAllQueue(void)
+{
+	_GetLock();
+	while(m_waitQueue.size() > 0)
+	{
+		delete m_waitQueue.front();
+		m_waitQueue.pop();
+	}
+
+	while(m_executeQueue.size() > 0)
+	{
+		delete m_executeQueue.front();
+		m_executeQueue.pop();
+	}
+
+	while(m_doneQueue.size() > 0)
+	{
+		delete m_doneQueue.front();
+		m_doneQueue.pop();
+	}
+
+	while(m_callbackQueue.size() > 0)
+	{
+		delete m_callbackQueue.front();
+		m_callbackQueue.pop();
 	}
 	_ReleaseLock();
 }

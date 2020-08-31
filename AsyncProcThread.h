@@ -44,7 +44,7 @@ private:
 
 	void _ThreadStart(void);
 	void _ThreadCycle(void);	
-
+	void _ClearAllQueue(void);
 	void _GetLock();
 	void _ReleaseLock();
 

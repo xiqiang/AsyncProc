@@ -23,11 +23,12 @@ public:
 	public:
 		MemberCaller(T* p, MemberFun fun)
 			: m_ptr(p)
-			, m_fun(fun)
+			, m_fun(fun) 
 		{
 		}
 
-		virtual void Invoke(AsyncProc* proc) {
+		virtual void Invoke(AsyncProc* proc) 
+		{
 			(m_ptr->*m_fun)(proc);
 		}
 
@@ -39,12 +40,14 @@ public:
 public:
 	AsyncProc(void)
 	    : m_callback(NULL)
-    	, m_caller(NULL) {
-
+    	, m_caller(NULL) 
+	{
 	}
 
-	virtual ~AsyncProc(void) {
-		if(m_caller) {
+	virtual ~AsyncProc(void) 
+	{
+		if(m_caller) 
+		{
 			delete m_caller;
 			m_caller = NULL;
 		}		
@@ -54,15 +57,18 @@ public:
 
 public:
 	template<class T>
-	void SetCallback( T* pVar, void(T::*pMemberFun)(AsyncProc*)) {
+	void SetCallback( T* pVar, void(T::*pMemberFun)(AsyncProc*)) 
+	{
 		m_caller = new MemberCaller<T>(pVar, pMemberFun);
 	}
 
-	void SetCallback(Callback fun) {
+	void SetCallback(Callback fun) 
+	{
 		m_callback = fun;
 	}	
 
-	void InvokeCallback(void) {
+	void InvokeCallback(void) 
+	{
 		if(m_callback)
 			m_callback(this);
 
