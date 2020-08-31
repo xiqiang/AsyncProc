@@ -5,9 +5,17 @@ class SleepProc
 {
 public:
     SleepProc(unsigned int ms) 
-		: m_ms(ms) {
+		: m_ms(ms) 
+    {
+		printf("SleepProc(time=%d)\n", m_ms);
 	}
     
+	virtual ~SleepProc(void)
+	{
+		AsyncProc::~AsyncProc();
+		printf("~SleepProc()\n");
+    }
+
 	virtual void Execute(void) 
     {
 		printf("SleepProc(i=%d,time=%d,tid=%d).Execute...\n", m_procIndex, m_ms, m_threadIndex);
@@ -19,11 +27,13 @@ public:
 		printf("SleepProc(i=%d,time=%d,tid=%d).Execute...OK\n", m_procIndex, m_ms, m_threadIndex);
     }
 
-	void SetThreadIndex(int threadIndex) {
+	void SetThreadIndex(int threadIndex) 
+    {
 		m_threadIndex = threadIndex;
 	}
 
-	void SetProcIndex(int procIndex) {
+	void SetProcIndex(int procIndex) 
+    {
 		m_procIndex = procIndex;
 	}
 

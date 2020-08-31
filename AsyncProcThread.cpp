@@ -116,6 +116,7 @@ void AsyncProcThread::Shutdown(void)
 	printf("AsyncProcThread::Shutdown...Wait: %d\n", m_customID);
 #if defined(_WIN32) || defined(_WIN64)
 	WaitForSingleObject(m_hThread, INFINITE);
+	CloseHandle(m_hThread);
 	m_hThread = INVALID_HANDLE_VALUE;
 #elif defined(__LINUX__)
 	pthread_join(m_tid, NULL);
@@ -124,6 +125,7 @@ void AsyncProcThread::Shutdown(void)
 	_GetLock();
 	m_state = State_None;
 	_ReleaseLock();
+	_ClearAllQueue();
 
 	printf("AsyncProcThread::Shutdown...OK: %d\n", m_customID);
 }
@@ -144,7 +146,7 @@ void AsyncProcThread::Terminate(void)
 	m_state = State_None;
 	_ReleaseLock();
 	_ClearAllQueue();
-	
+
 	printf("AsyncProcThread::Terminate...OK: %d\n", m_customID);
 }
 

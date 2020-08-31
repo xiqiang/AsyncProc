@@ -3,7 +3,8 @@
 #include <cstdio> 
 #include <stdlib.h> 
 #if defined(_WIN32) || defined(_WIN64)
-
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
 #elif defined(__LINUX__)
 #include <pthread.h> 
 #include <unistd.h> 
@@ -40,7 +41,7 @@ void* CycleThreadProc(void* arg)
 }
 
 int main() 
-{ 
+{
 #if defined(_WIN32) || defined(_WIN64)
 	InitializeCriticalSection(&cycleLock);
 	cycleHandle = CreateThread (NULL, 0, CycleThreadProc, NULL, 0, &cycleThreadId);
@@ -78,7 +79,8 @@ int main()
 				apm.Terminate();
 				alive = false;
 #if defined(_WIN32) || defined(_WIN64)
-				WaitForSingleObject(cycleHandle, INFINITE);
+				WaitForSingleObject(cycleHandle, INFINITE);				
+				CloseHandle(cycleHandle);
 #elif defined(__LINUX__)
 				pthread_join(cycleThreadId, NULL);
 #endif							
@@ -87,5 +89,13 @@ int main()
 	}
 
 	printf("main exit.\n");
+
+#if defined(_WIN32) || defined(_WIN64)
+	DeleteCriticalSection(&cycleLock);
+	_CrtDumpMemoryLeaks();
+#elif defined(__LINUX__)
+	pthread_mutex_destroy(&cycleLock);
+#endif	
+
 	return 0; 
 }
