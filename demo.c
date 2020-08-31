@@ -1,7 +1,7 @@
 #include <pthread.h> 
 #include <stdio.h> 
 #include <unistd.h> 
-#include "AsyncProcManager.h"
+#include "AsyncProcThread.h"
 #include "demoProc.h"
 
 #if defined(__WINDOWS__)
@@ -13,7 +13,7 @@
 	pthread_t cycleThreadId;
 #endif
 
-AsyncProcManager apm;
+AsyncProcThread apm;
 bool alive;
 
 #if defined(__WINDOWS__)

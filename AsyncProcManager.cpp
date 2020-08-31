@@ -1,207 +1,99 @@
-#include "AsyncProcManager.h"
 
-#if defined(__WINDOWS__)
-DWORD WINAPI AsyncProcManager::ThreadProc (PVOID arg)
-#elif defined(__LINUX__)
-void* AsyncProcManager::ThreadProc(void* arg)
-#endif	
+AsyncProcThread::AsyncProcThread()
 {
-	AsyncProcManager* procMgr = (AsyncProcManager*)arg;
-	procMgr->_ThreadStart();
-	return 0;
+
 }
 
-AsyncProcManager::AsyncProcManager()
-	: m_count(0)
-	, m_state(State_None)
+AsyncProcThread::~AsyncProcThread()
 {
-#if defined(__WINDOWS__)
-	InitializeCriticalSection(&m_queueLock);
-	InitializeConditionVariable(&m_awakeCondition);
-#elif defined(__LINUX__)
-	pthread_mutex_init(&m_queueLock, NULL);
-	pthread_cond_init(&m_awakeCondition, NULL);
-#endif	
-}
-
-AsyncProcManager::~AsyncProcManager()
-{
-#if defined(__WINDOWS__)
-	DeleteCriticalSection(&m_queueLock);
-#elif defined(__LINUX__)
-	pthread_mutex_destroy(&m_queueLock);
-	pthread_cond_destroy(&m_awakeCondition);
-#endif	
-}
-
-void AsyncProcManager::Startup(void)
-{
-	printf("AsyncProcManager::Startup...\n");
-#if defined(__WINDOWS__)
-	m_hThread = CreateThread (NULL, 0, ThreadProc, (PVOID)this, 0, &m_tid);
-#elif defined(__LINUX__)
-	pthread_create(&m_tid, NULL, ThreadProc, (void*)this); 
-#endif	
-	printf("AsyncProcManager::Startup...OK.\n");	
-}
-
-void AsyncProcManager::Shutdown(void)
-{
-	printf("AsyncProcManager::Shutdown...\n");
-	if(m_state == State_Sleeping)
+	for(std::vector<AsyncProcThread*>::iterator it = m_threads.bengin();
+		it != m_threadList.end(); ++it)
 	{
-#if defined(__WINDOWS__)
-		WakeConditionVariable (&m_awakeCondition);
-#elif defined(__LINUX__)
-		pthread_cond_signal(&m_awakeCondition); 
-#endif
-	}
-
-	_LockQueue();
-	m_state = State_Stopping;
-	_UnlockQueue();
-
-#if defined(__WINDOWS__)
-	WaitForSingleObject(m_hThread, INFINITE);
-#elif defined(__LINUX__)
-	pthread_join(m_tid, NULL);
-#endif
-	printf("AsyncProcManager::Shutdown...OK.\n");
-}
-
-void AsyncProcManager::Terminate(void)
-{
-	printf("AsyncProcManager::Terminate...\n");
-#if defined(__WINDOWS__)
-	TerminateThread(m_hThread, 0);
-#elif defined(__LINUX__)
-	pthread_cancel(m_tid);
-#endif	
-}
-
-void AsyncProcManager::Tick()
-{
-	_LockQueue();
-	while(m_doneQueue.size() > 0)
-	{
-		m_callbackQueue.push(m_doneQueue.front());
-		m_doneQueue.pop();
-	}
-	_UnlockQueue();
-
-	while(m_callbackQueue.size() > 0)
-	{
-		AsyncProc* proc = m_callbackQueue.front();
-		proc->InvokeCallback();
-
-		delete proc;
-		m_callbackQueue.pop();
-
-		_LockQueue();
-		m_count -= 1;
-		_UnlockQueue();
+		delete(*it);
 	}
 }
 
-void AsyncProcManager::Enqueue(AsyncProc* proc)
+void AsyncProcThread::Startup(int threadCount /*= 1*/)
 {
-	_LockQueue();
-
-	m_waitQueue.push(proc);
-	m_count += 1;
-
-	if(m_state == State_Sleeping)
+	assert(threadCount > 0);
+	assert(m_threads.size() == 0);
+	for(int t = 0; t < threadCount; ++t)
 	{
-#if defined(__WINDOWS__)
-		WakeConditionVariable (&m_awakeCondition);
-#elif defined(__LINUX__)
-		pthread_cond_signal(&m_awakeCondition); 
-#endif	
-		m_state = State_Running;
-	}
+		AsyncProcThread* thread = new AsyncProcThread();
+		if(!thread)
+			break;
 
-	_UnlockQueue();
-}
-
-size_t AsyncProcManager::Count(void)
-{
-	size_t num = 0;
-
-	_LockQueue();
-	num = m_count;
-	_UnlockQueue();
-
-	return num;
-}
-
-void AsyncProcManager::_ThreadStart()
-{
-	_LockQueue();
-	m_state = State_Running;
-	_UnlockQueue();
-
-	while(true)
-	{
-		bool stopping = false;
-		_LockQueue();
-		stopping = (m_state == State_Stopping);
-		_UnlockQueue();	
-
-		if(stopping)
-			return;
-
-		_ThreadCycle();
+		thread->Startup();
+		m_threads.push_back(thread);
 	}
 }
 
-void AsyncProcManager::_ThreadCycle()
+int AsyncProcThread::Enqueue(AsyncProc* proc, int threadIndex /*= -1*/)
 {
-	_LockQueue();
-	while(m_waitQueue.size() > 0)
-	{
-		m_executeQueue.push(m_waitQueue.front());
-		m_waitQueue.pop();
-	}
-	_UnlockQueue();
+	if(m_threads.size() == 0)
+		return -1;
 
-	while(m_executeQueue.size() > 0)
+	assert(proc);
+	assert(threadIndex < m_threads.size());
+	if(threadIndex < 0)
 	{
-		AsyncProc* proc = m_executeQueue.front();
-		proc->Execute();
-
-		_LockQueue();
-		m_doneQueue.push(proc);
-		m_executeQueue.pop();
-		_UnlockQueue();		
+		int minCount = m_threads[0]->Count();
+		threadIndex = 0;
+		for(int t = 1; t < m_threads.size(); ++t)
+		{
+			int count = m_threads[t]->Count();
+			if(count < minCount)
+			{
+				minCount = count;
+				threadIndex = t;
+			}
+		}
 	}
 
-	_LockQueue();
-	while (m_waitQueue.size() == 0 && m_state == State_Running)
-	{
-		m_state = State_Sleeping;
-#if defined(__WINDOWS__)
-		SleepConditionVariableCS (&m_awakeCondition, &m_queueLock, INFINITE);
-#elif defined(__LINUX__)
-		pthread_cond_wait(&m_awakeCondition, &m_queueLock); 
-#endif					
-	}
-	_UnlockQueue();
+	m_threads[threadIndex]->Enqueue(proc);
+	return threadIndex;
 }
 
-void AsyncProcManager::_LockQueue()
+void AsyncProcThread::Shutdown(void)
 {
-#if defined(__WINDOWS__)
-	EnterCriticalSection(&m_queueLock);
-#elif defined(__LINUX__)
-	pthread_mutex_lock(&m_queueLock);
-#endif	
+	assert(m_threads.size() > 0);
+	for(std::vector<AsyncProcThread*>::iterator it = m_threads.bengin();
+		it != m_threadList.end(); ++it)
+	{
+		(*it)->Shutdown();
+		delete(*it);
+	}
+	m_threads.clear();
 }
 
-void AsyncProcManager::_UnlockQueue()
+void AsyncProcThread::Terminate(void)
 {
-#if defined(__WINDOWS__)
-	LeaveCriticalSection(&m_queueLock);
-#elif defined(__LINUX__)
-	pthread_mutex_unlock(&m_queueLock);
-#endif	
+	assert(m_threads.size() > 0);
+	for(std::vector<AsyncProcThread*>::iterator it = m_threads.bengin();
+		it != m_threadList.end(); ++it)
+	{
+		(*it)->Terminate();
+		delete(*it);
+	}
+	m_threads.clear();
+}
+
+void AsyncProcThread::CallbackTick()
+{
+	for(std::vector<AsyncProcThread*>::iterator it = m_threads.bengin();
+		it != m_threadList.end(); ++it)
+	{
+		(*it)->CallbackTick();
+	}	
+}
+
+size_t AsyncProcThread::Count(void)
+{
+	size_t count = 0;
+	for(std::vector<AsyncProcThread*>::iterator it = m_threads.bengin();
+		it != m_threadList.end(); ++it)
+	{
+		count += (*it)->Count();
+	}
+	return count;
 }

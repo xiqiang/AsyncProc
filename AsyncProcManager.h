@@ -1,9 +1,8 @@
-#ifndef AsyncProcMgr_H_Xiqiang_20190907
-#define AsyncProcMgr_H_Xiqiang_20190907
+#ifndef AsyncProcManager_H_Xiqiang_20190907
+#define AsyncProcManager_H_Xiqiang_20190907
 
-#include <cstdio>
-#include <queue>
-#include "AsyncProc.h"
+#include <vector>
+#include "AsyncThread.h"
 
 #if defined(__WINDOWS__)
 #define WIN32_LEAN_AND_MEAN
@@ -20,65 +19,19 @@ static void* ThreadProc(void* arg);
 
 class AsyncProcManager
 {
-public:	
-	typedef std::queue<AsyncProc*> ProcQueue;
-	enum State 
-	{
-		State_None,
-		State_Running,
-		State_Sleeping,
-		State_Stopping,
-	};
-
 public:
 	AsyncProcManager();
 	~AsyncProcManager();
 
 public:
-	void Startup(void);
-
+	void Startup(int threadCount = 1);
+	int Enqueue(AsyncProc* proc, int threadIndex = -1);
 	void Shutdown(void);
-	
 	void Terminate(void);
-	
-	void Tick(void);
-
-	void Enqueue(AsyncProc* proc);
-
-	size_t Count(void);
+	void CallbackTick(void);
 
 private:
-#if defined(__WINDOWS__)
-	static DWORD WINAPI ThreadProc (PVOID arg);
-#elif defined(__LINUX__)
-	static void* ThreadProc(void* arg);
-#endif
-
-	void _ThreadStart(void);
-	void _ThreadCycle(void);	
-
-	void _LockQueue();
-	void _UnlockQueue();
-
-private:
-	ProcQueue m_waitQueue;
-	ProcQueue m_executeQueue;
-	ProcQueue m_doneQueue;
-	ProcQueue m_callbackQueue;
-
-	size_t m_count;
-	State m_state;
-
-#if defined(__WINDOWS__)
-	CRITICAL_SECTION m_queueLock;
-	CONDITION_VARIABLE m_awakeCondition;
-	DWORD m_tid;
-	HANDLE m_hThread;
-#elif defined(__LINUX__)
-	pthread_mutex_t m_queueLock;
-	pthread_cond_t m_awakeCondition;
-	pthread_t m_tid;
-#endif
+	std::vector<AsyncProcThread*> m_threads;
 };
 
 #endif
