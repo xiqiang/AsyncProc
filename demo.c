@@ -1,7 +1,7 @@
 #include <pthread.h> 
 #include <stdio.h> 
 #include <unistd.h> 
-#include "AsyncProcThread.h"
+#include "AsyncProcManager.h"
 #include "demoProc.h"
 
 #if defined(__WINDOWS__)
@@ -13,7 +13,7 @@
 	pthread_t cycleThreadId;
 #endif
 
-AsyncProcThread apm;
+AsyncProcManager apm;
 bool alive;
 
 #if defined(__WINDOWS__)
@@ -22,10 +22,10 @@ DWORD WINAPI CycleThreadProc(PVOID arg)
 void* CycleThreadProc(void* arg)
 #endif	
 {
-	apm.Startup();
+	apm.Startup(10);
 
 	while(alive)
-		apm.Tick();
+		apm.CallbackTick();
 
 	return 0;
 }
@@ -56,7 +56,10 @@ int main()
 #endif			
 				break;
 			case 's':
-				apm.Enqueue(new SleepProc(5));
+				{
+					int threadIndex = apm.Enqueue(new SleepProc(5));
+					printf("enqued index:%d\n", threadIndex);
+				}
 				break;
 			case 't':
 				apm.Terminate();

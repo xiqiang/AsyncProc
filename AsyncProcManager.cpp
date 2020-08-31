@@ -1,19 +1,21 @@
+#include "AsyncProcManager.h"
+#include <cstdio>
+#include <assert.h>
 
-AsyncProcThread::AsyncProcThread()
+AsyncProcManager::AsyncProcManager()
 {
 
 }
 
-AsyncProcThread::~AsyncProcThread()
+AsyncProcManager::~AsyncProcManager()
 {
-	for(std::vector<AsyncProcThread*>::iterator it = m_threads.bengin();
-		it != m_threadList.end(); ++it)
-	{
-		delete(*it);
-	}
+	printf("AsyncProcManager::~AsyncProcManager\n");
+
+	if(m_threads.size() > 0)
+		Shutdown();
 }
 
-void AsyncProcThread::Startup(int threadCount /*= 1*/)
+void AsyncProcManager::Startup(int threadCount /*= 1*/)
 {
 	assert(threadCount > 0);
 	assert(m_threads.size() == 0);
@@ -28,37 +30,45 @@ void AsyncProcThread::Startup(int threadCount /*= 1*/)
 	}
 }
 
-int AsyncProcThread::Enqueue(AsyncProc* proc, int threadIndex /*= -1*/)
+int AsyncProcManager::Enqueue(AsyncProc* proc)
+{
+	if(m_threads.size() == 0)
+		return -1;
+
+	assert(proc);
+
+	int minCount = m_threads[0]->GetProcCount();
+	size_t threadIndex = 0;
+	for(size_t t = 1; t < m_threads.size(); ++t)
+	{
+		int count = m_threads[t]->GetProcCount();
+		if(count < minCount)
+		{
+			minCount = count;
+			threadIndex = t;
+		}
+	}
+
+	return Enqueue(proc, threadIndex);
+}
+
+int AsyncProcManager::Enqueue(AsyncProc* proc, size_t threadIndex)
 {
 	if(m_threads.size() == 0)
 		return -1;
 
 	assert(proc);
 	assert(threadIndex < m_threads.size());
-	if(threadIndex < 0)
-	{
-		int minCount = m_threads[0]->Count();
-		threadIndex = 0;
-		for(int t = 1; t < m_threads.size(); ++t)
-		{
-			int count = m_threads[t]->Count();
-			if(count < minCount)
-			{
-				minCount = count;
-				threadIndex = t;
-			}
-		}
-	}
 
 	m_threads[threadIndex]->Enqueue(proc);
 	return threadIndex;
 }
 
-void AsyncProcThread::Shutdown(void)
+void AsyncProcManager::Shutdown(void)
 {
 	assert(m_threads.size() > 0);
-	for(std::vector<AsyncProcThread*>::iterator it = m_threads.bengin();
-		it != m_threadList.end(); ++it)
+	for(std::vector<AsyncProcThread*>::iterator it = m_threads.begin();
+		it != m_threads.end(); ++it)
 	{
 		(*it)->Shutdown();
 		delete(*it);
@@ -66,11 +76,11 @@ void AsyncProcThread::Shutdown(void)
 	m_threads.clear();
 }
 
-void AsyncProcThread::Terminate(void)
+void AsyncProcManager::Terminate(void)
 {
 	assert(m_threads.size() > 0);
-	for(std::vector<AsyncProcThread*>::iterator it = m_threads.bengin();
-		it != m_threadList.end(); ++it)
+	for(std::vector<AsyncProcThread*>::iterator it = m_threads.begin();
+		it != m_threads.end(); ++it)
 	{
 		(*it)->Terminate();
 		delete(*it);
@@ -78,22 +88,22 @@ void AsyncProcThread::Terminate(void)
 	m_threads.clear();
 }
 
-void AsyncProcThread::CallbackTick()
+void AsyncProcManager::CallbackTick()
 {
-	for(std::vector<AsyncProcThread*>::iterator it = m_threads.bengin();
-		it != m_threadList.end(); ++it)
+	for(std::vector<AsyncProcThread*>::iterator it = m_threads.begin();
+		it != m_threads.end(); ++it)
 	{
 		(*it)->CallbackTick();
 	}	
 }
 
-size_t AsyncProcThread::Count(void)
+size_t AsyncProcManager::GetProcCount(void)
 {
 	size_t count = 0;
-	for(std::vector<AsyncProcThread*>::iterator it = m_threads.bengin();
-		it != m_threadList.end(); ++it)
+	for(std::vector<AsyncProcThread*>::iterator it = m_threads.begin();
+		it != m_threads.end(); ++it)
 	{
-		count += (*it)->Count();
+		count += (*it)->GetProcCount();
 	}
 	return count;
 }

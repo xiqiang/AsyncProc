@@ -1,7 +1,6 @@
 #ifndef AsyncProcThread_H_Xiqiang_20200831
 #define AsyncProcThread_H_Xiqiang_20200831
 
-#include <cstdio>
 #include <queue>
 #include "AsyncProc.h"
 
@@ -11,12 +10,6 @@
 #elif defined(__LINUX__)
 #include <pthread.h>
 #endif
-
-#if defined(__WINDOWS__)
-static DWORD WINAPI ThreadProc (PVOID arg);
-#elif defined(__LINUX__)
-static void* ThreadProc(void* arg);
-#endif	
 
 class AsyncProcThread
 {
@@ -35,25 +28,25 @@ public:
 	~AsyncProcThread();
 
 public:
-	void Startup(void);
+	bool Startup(void);
 	void Enqueue(AsyncProc* proc);
 	void Shutdown(void);
 	void Terminate(void);
 	void CallbackTick(void);
-	size_t Count(void);
+	size_t GetProcCount(void);
 
 private:
 #if defined(__WINDOWS__)
-	static DWORD WINAPI ThreadProc (PVOID arg);
+	static DWORD WINAPI ThreadFunc (PVOID arg);
 #elif defined(__LINUX__)
-	static void* ThreadProc(void* arg);
+	static void* ThreadFunc(void* arg);
 #endif
 
 	void _ThreadStart(void);
 	void _ThreadCycle(void);	
 
-	void _LockQueue();
-	void _UnlockQueue();
+	void _GetLock();
+	void _ReleaseLock();
 
 private:
 	ProcQueue m_waitQueue;
