@@ -4,6 +4,7 @@
 
 AsyncProcManager::AsyncProcManager()
 {
+	printf("AsyncProcManager(addr=%p)\n", this);
 #if defined(_WIN32) || defined(_WIN64)
 	InitializeCriticalSection(&m_queueLock);
 #elif defined(__LINUX__)
@@ -89,7 +90,7 @@ void AsyncProcManager::Shutdown(void)
 {
 	_GetLock();
 	assert(m_threads.size() > 0);
-	for(std::vector<AsyncProcThread*>::iterator it = m_threads.begin();
+	for(ThreadVector::iterator it = m_threads.begin();
 		it != m_threads.end(); ++it)
 	{
 		(*it)->Shutdown();
@@ -103,7 +104,7 @@ void AsyncProcManager::Terminate(void)
 {
 	_GetLock();
 	assert(m_threads.size() > 0);
-	for(std::vector<AsyncProcThread*>::iterator it = m_threads.begin();
+	for(ThreadVector::iterator it = m_threads.begin();
 		it != m_threads.end(); ++it)
 	{
 		(*it)->Terminate();
@@ -116,7 +117,7 @@ void AsyncProcManager::Terminate(void)
 void AsyncProcManager::CallbackTick()
 {
 	_GetLock();
-	for(std::vector<AsyncProcThread*>::iterator it = m_threads.begin();
+	for(ThreadVector::iterator it = m_threads.begin();
 		it != m_threads.end(); ++it)
 	{
 		(*it)->CallbackTick();
@@ -128,7 +129,7 @@ size_t AsyncProcManager::GetProcCount(void)
 {
 	_GetLock();
 	size_t count = 0;
-	for(std::vector<AsyncProcThread*>::iterator it = m_threads.begin();
+	for(ThreadVector::iterator it = m_threads.begin();
 		it != m_threads.end(); ++it)
 	{
 		count += (*it)->GetProcCount();

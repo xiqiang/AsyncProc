@@ -6,6 +6,9 @@
 
 class AsyncProcManager
 {
+public:	
+	typedef std::vector<AsyncProcThread*> ThreadVector;
+
 public:
 	AsyncProcManager();
 	~AsyncProcManager();
@@ -24,7 +27,7 @@ private:
 	void _ReleaseLock();
 
 private:
-	std::vector<AsyncProcThread*> m_threads;
+	ThreadVector m_threads;
 
 #if defined(_WIN32) || defined(_WIN64)
 	CRITICAL_SECTION m_queueLock;

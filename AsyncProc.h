@@ -1,42 +1,10 @@
 #ifndef AsyncProc_H_Xiqiang_20190907
 #define AsyncProc_H_Xiqiang_20190907
 
+#include "AsyncProcDef.h"
+
 class AsyncProc
 {
-public:
-	friend class AsyncProcMgr;
-	typedef void (*Callback)(AsyncProc*);
-
-	class Caller
-	{
-	public:
-		virtual ~Caller() = 0;
-		virtual void Invoke(AsyncProc* proc) = 0;
-	};
-
-	template<class T>
-	class MemberCaller 
-		: public Caller
-	{
-		typedef void (T::*MemberFun)(AsyncProc*);
-
-	public:
-		MemberCaller(T* p, MemberFun fun)
-			: m_ptr(p)
-			, m_fun(fun) 
-		{
-		}
-
-		virtual void Invoke(AsyncProc* proc) 
-		{
-			(m_ptr->*m_fun)(proc);
-		}
-
-	private:
-		T*					m_ptr;
-		MemberFun			m_fun;
-	};
-
 public:
 	AsyncProc(void)
 	    : m_callback(NULL)
@@ -57,28 +25,28 @@ public:
 
 public:
 	template<class T>
-	void SetCallback( T* pVar, void(T::*pMemberFun)(AsyncProc*)) 
+	void SetCallback( T* pVar, void(T::*pMemberFun)(const AsyncProcResult& result))
 	{
-		m_caller = new MemberCaller<T>(pVar, pMemberFun);
+		m_caller = new AsyncProcMemberCaller<T>(pVar, pMemberFun);
 	}
 
-	void SetCallback(Callback fun) 
+	void SetCallback(AsyncProcCallback fun)
 	{
 		m_callback = fun;
 	}	
 
-	void InvokeCallback(void) 
+	void InvokeCallback(const AsyncProcResult& result)
 	{
 		if(m_callback)
-			m_callback(this);
+			m_callback(result);
 
 		if(m_caller)
-			m_caller->Invoke(this);
+			m_caller->Invoke(result);
 	}		
 
 private:
-	Callback m_callback;
-	Caller* m_caller;
+	AsyncProcCallback m_callback;
+	AsyncProcCaller* m_caller;
 };
 
 #endif

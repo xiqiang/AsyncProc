@@ -14,13 +14,20 @@
 class AsyncProcThread
 {
 public:	
-	typedef std::queue<AsyncProc*> ProcQueue;
+	typedef std::queue<AsyncProc*>		ProcQueue;
+	typedef std::queue<AsyncProcResult> ResultQueue;
+
 	enum State 
 	{
 		State_None,
 		State_Running,
 		State_Sleeping,
 		State_Stopping,
+	};
+
+	struct ProcResult
+	{
+
 	};
 
 public:
@@ -43,26 +50,26 @@ private:
 #endif
 
 	void _ThreadStart(void);
-	void _ThreadCycle(void);	
-	void _ClearAllQueue(void);
+	void _ThreadCycle(void);
+	void _OnExeEnd(AsyncProcResultType type, const char* what);
+	void _ClearProcs(void);
 	void _GetLock();
 	void _ReleaseLock();
 
 private:
 	ProcQueue m_waitQueue;
-	ProcQueue m_executeQueue;
-	ProcQueue m_doneQueue;
-	ProcQueue m_callbackQueue;
+	ResultQueue m_doneQueue;
 
 	int m_customID;
 	size_t m_count;
 	State m_state;
+	AsyncProc* m_exeProc;
 
 #if defined(_WIN32) || defined(_WIN64)
 	CRITICAL_SECTION m_queueLock;
 	CONDITION_VARIABLE m_awakeCondition;
-	DWORD m_tid;
 	HANDLE m_hThread;
+	DWORD m_tid;
 #elif defined(__LINUX__)
 	pthread_mutex_t m_queueLock;
 	pthread_cond_t m_awakeCondition;

@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\AsyncProc.h" />
+    <ClInclude Include="..\AsyncProcDef.h" />
     <ClInclude Include="..\AsyncProcManager.h" />
     <ClInclude Include="..\AsyncProcThread.h" />
     <ClInclude Include="..\demoProc.h" />

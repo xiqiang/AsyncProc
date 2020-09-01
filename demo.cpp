@@ -2,6 +2,9 @@
 
 #include <cstdio> 
 #include <stdlib.h> 
+#include <assert.h>
+#include <time.h>
+
 #if defined(_WIN32) || defined(_WIN64)
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
@@ -38,10 +41,19 @@ void* CycleThreadProc(void* arg)
 	return 0;
 }
 
+void demoProcCallback(const AsyncProcResult& result)
+{
+	DemoProc* proc = dynamic_cast<DemoProc*>(result.proc);
+	assert(proc);
+	printf("demoProcCallback(time=%d,tid=%d).Execute...%d(%s) :%d\n", proc->GetMilliSeconds(), proc->GetThreadIndex(), result.type, result.what.c_str(), proc->GetID());
+}
+
 int main() 
 {
 	apm = new AsyncProcManager();
 	apm->Startup(10);
+
+	srand(clock());
 
 #if defined(_WIN32) || defined(_WIN64)
 	InitializeCriticalSection(&cycleLock);
@@ -68,11 +80,11 @@ int main()
 				break;
 			case 's':
 				{
-					for(int i = 0; i < rand() % 100; ++i) {
-						SleepProc* proc = new SleepProc(rand() % 10000);
+					for(int i = 0; i < rand() % 5 + 5; ++i) {
+						DemoProc* proc = new DemoProc(procIndex++, rand() % 3000 + 2000);
 						int threadIndex = apm->Enqueue(proc);
 						proc->SetThreadIndex(threadIndex);
-						proc->SetProcIndex(procIndex++);
+						proc->SetCallback(demoProcCallback);
 					}
 				}
 				break;

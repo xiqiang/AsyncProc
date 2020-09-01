@@ -3,11 +3,32 @@
 #include <assert.h>
 
 #if defined(_WIN32) || defined(_WIN64)
+#elif defined(__LINUX__)
+#include <signal.h>
+
+void my_handler1(int sig)
+{
+	printf("my_handle1: Got signal %d, tid: %lu\n", sig, pthread_self());
+	exit(0);
+}
+
+#endif	
+
+#if defined(_WIN32) || defined(_WIN64)
 DWORD WINAPI AsyncProcThread::ThreadFunc (PVOID arg)
 #elif defined(__LINUX__)
 void* AsyncProcThread::ThreadFunc(void* arg)
 #endif	
 {
+#if defined(_WIN32) || defined(_WIN64)
+#elif defined(__LINUX__)
+	printf("thread start tid: %lu\n", pthread_self());
+	struct sigaction my_action;
+	my_action.sa_handler = my_handler1;
+	my_action.sa_flags = SA_RESTART;
+	sigaction(SIGUSR1, &my_action, NULL);
+#endif	
+
 	AsyncProcThread* procMgr = (AsyncProcThread*)arg;
 	procMgr->_ThreadStart();
 	return 0;
@@ -17,11 +38,14 @@ AsyncProcThread::AsyncProcThread(int customID)
 	: m_customID(customID)
 	, m_count(0)
 	, m_state(State_None)
+	, m_exeProc(NULL)
 {
+	printf("AsyncProcThread(addr=%p) :%d\n", this, m_customID);
 #if defined(_WIN32) || defined(_WIN64)
 	InitializeCriticalSection(&m_queueLock);
 	InitializeConditionVariable(&m_awakeCondition);
 	m_hThread = INVALID_HANDLE_VALUE;
+	m_tid = -1;
 #elif defined(__LINUX__)
 	pthread_mutex_init(&m_queueLock, NULL);
 	pthread_cond_init(&m_awakeCondition, NULL);
@@ -57,15 +81,9 @@ bool AsyncProcThread::Startup(void)
 #endif	
 
 	if(ret)
-	{
 		m_state = State_Running;
-		printf("AsyncProcThread::Startup...OK: %d\n", m_customID);	
-	}
 	else
-	{
 		m_state = State_None;
-		printf("AsyncProcThread::Startup...Failed: %d\n", m_customID);	
-	}
 		
 	_ReleaseLock();	
 	return ret;
@@ -125,7 +143,7 @@ void AsyncProcThread::Shutdown(void)
 	_GetLock();
 	m_state = State_None;
 	_ReleaseLock();
-	_ClearAllQueue();
+	_ClearProcs();
 
 	printf("AsyncProcThread::Shutdown...OK: %d\n", m_customID);
 }
@@ -140,37 +158,33 @@ void AsyncProcThread::Terminate(void)
 #if defined(_WIN32) || defined(_WIN64)
 	TerminateThread(m_hThread, 0);
 #elif defined(__LINUX__)
-	pthread_cancel(m_tid);
+	//pthread_cancel(m_tid);
+	pthread_kill(m_tid, SIGUSR1);
 #endif	
 
 	m_state = State_None;
 	_ReleaseLock();
-	_ClearAllQueue();
+	_ClearProcs();
 
 	printf("AsyncProcThread::Terminate...OK: %d\n", m_customID);
 }
 
 void AsyncProcThread::CallbackTick()
 {
+	AsyncProcResult result;
 	_GetLock();
-	while(m_doneQueue.size() > 0)
+	if(m_doneQueue.size() > 0)
 	{
-		m_callbackQueue.push(m_doneQueue.front());
+		result = m_doneQueue.front();
 		m_doneQueue.pop();
+		m_count -= 1;
 	}
 	_ReleaseLock();
 
-	while(m_callbackQueue.size() > 0)
+	if(result.proc)
 	{
-		AsyncProc* proc = m_callbackQueue.front();
-		proc->InvokeCallback();
-
-		delete proc;
-		m_callbackQueue.pop();
-
-		_GetLock();
-		m_count -= 1;
-		_ReleaseLock();
+		result.proc->InvokeCallback(result);
+		delete result.proc;
 	}
 }
 
@@ -201,22 +215,28 @@ void AsyncProcThread::_ThreadStart()
 void AsyncProcThread::_ThreadCycle()
 {
 	_GetLock();
-	while(m_waitQueue.size() > 0)
+	if(m_waitQueue.size() > 0)
 	{
-		m_executeQueue.push(m_waitQueue.front());
+		m_exeProc = m_waitQueue.front();
 		m_waitQueue.pop();
 	}
 	_ReleaseLock();
 
-	while(m_executeQueue.size() > 0)
+	if(m_exeProc)
 	{
-		AsyncProc* proc = m_executeQueue.front();
-		proc->Execute();
-
-		_GetLock();
-		m_doneQueue.push(proc);
-		m_executeQueue.pop();
-		_ReleaseLock();		
+		try 
+		{
+			m_exeProc->Execute();
+			_OnExeEnd(APRT_FINISH, NULL);
+		}
+		catch (const std::exception & e) 
+		{
+			_OnExeEnd(APRT_EXCEPTION, e.what());
+		}
+		catch (...)
+		{
+			_OnExeEnd(APRT_EXCEPTION, NULL);
+		}
 	}
 
 	_GetLock();
@@ -225,6 +245,7 @@ void AsyncProcThread::_ThreadCycle()
 		printf("AsyncProcThread::_ThreadCycle...Sleep %d\n", m_customID);
 
 		m_state = State_Sleeping;
+
 #if defined(_WIN32) || defined(_WIN64)
 		SleepConditionVariableCS (&m_awakeCondition, &m_queueLock, INFINITE);
 #elif defined(__LINUX__)
@@ -233,8 +254,22 @@ void AsyncProcThread::_ThreadCycle()
 	}
 	_ReleaseLock();
 }
-	
-void AsyncProcThread::_ClearAllQueue(void)
+
+void AsyncProcThread::_OnExeEnd(AsyncProcResultType type, const char* what)
+{
+	_GetLock();
+	AsyncProcResult result;
+	result.proc = m_exeProc;
+	result.type = type;
+	if(what)
+		result.what = what;
+
+	m_doneQueue.push(result);
+	m_exeProc = NULL;
+	_ReleaseLock();
+}
+
+void AsyncProcThread::_ClearProcs(void)
 {
 	_GetLock();
 	while(m_waitQueue.size() > 0)
@@ -243,23 +278,18 @@ void AsyncProcThread::_ClearAllQueue(void)
 		m_waitQueue.pop();
 	}
 
-	while(m_executeQueue.size() > 0)
-	{
-		delete m_executeQueue.front();
-		m_executeQueue.pop();
-	}
-
 	while(m_doneQueue.size() > 0)
 	{
-		delete m_doneQueue.front();
+		delete m_doneQueue.front().proc;
 		m_doneQueue.pop();
 	}
 
-	while(m_callbackQueue.size() > 0)
+	if(m_exeProc)
 	{
-		delete m_callbackQueue.front();
-		m_callbackQueue.pop();
+		delete m_exeProc;
+		m_exeProc = NULL;
 	}
+
 	_ReleaseLock();
 }
 
