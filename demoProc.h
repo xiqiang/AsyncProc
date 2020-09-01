@@ -12,7 +12,6 @@ public:
     
 	virtual ~SleepProc(void)
 	{
-		AsyncProc::~AsyncProc();
 		printf("~SleepProc()\n");
     }
 
