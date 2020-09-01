@@ -22,7 +22,7 @@
 	pthread_t cycleThreadId;
 #endif
 
-AsyncProcManager apm;
+AsyncProcManager* apm;
 bool alive;
 int procIndex = 0;
 
@@ -32,16 +32,17 @@ DWORD WINAPI CycleThreadProc(PVOID arg)
 void* CycleThreadProc(void* arg)
 #endif	
 {
-	apm.Startup(10);
-
 	while(alive)
-		apm.CallbackTick();
+		apm->CallbackTick();
 
 	return 0;
 }
 
 int main() 
 {
+	apm = new AsyncProcManager();
+	apm->Startup(10);
+
 #if defined(_WIN32) || defined(_WIN64)
 	InitializeCriticalSection(&cycleLock);
 	cycleHandle = CreateThread (NULL, 0, CycleThreadProc, NULL, 0, &cycleThreadId);
@@ -57,7 +58,7 @@ int main()
 		switch(c)
 		{
 			case 'q':			
-				apm.Shutdown();
+				apm->Shutdown();
 				alive = false;
 #if defined(_WIN32) || defined(_WIN64)
 				WaitForSingleObject(cycleHandle, INFINITE);
@@ -69,18 +70,17 @@ int main()
 				{
 					for(int i = 0; i < rand() % 100; ++i) {
 						SleepProc* proc = new SleepProc(rand() % 10000);
-						int threadIndex = apm.Enqueue(proc);
+						int threadIndex = apm->Enqueue(proc);
 						proc->SetThreadIndex(threadIndex);
 						proc->SetProcIndex(procIndex++);
 					}
 				}
 				break;
 			case 't':
-				apm.Terminate();
+				apm->Terminate();
 				alive = false;
 #if defined(_WIN32) || defined(_WIN64)
-				WaitForSingleObject(cycleHandle, INFINITE);				
-				CloseHandle(cycleHandle);
+				WaitForSingleObject(cycleHandle, INFINITE);		
 #elif defined(__LINUX__)
 				pthread_join(cycleThreadId, NULL);
 #endif							
@@ -88,10 +88,12 @@ int main()
 		}
 	}
 
+	delete apm;
 	printf("main exit.\n");
 
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32) || defined(_WIN64)		
 	DeleteCriticalSection(&cycleLock);
+	CloseHandle(cycleHandle);
 	_CrtDumpMemoryLeaks();
 #elif defined(__LINUX__)
 	pthread_mutex_destroy(&cycleLock);
