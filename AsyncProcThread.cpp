@@ -2,16 +2,8 @@
 #include <cstdio>
 #include <assert.h>
 
-#if defined(_WIN32) || defined(_WIN64)
-#elif defined(__LINUX__)
-#include <signal.h>
-
-void my_handler1(int sig)
-{
-	printf("my_handle1: Got signal %d, tid: %lu\n", sig, pthread_self());
-	exit(0);
-}
-
+#if defined(__LINUX__)
+#include <cxxabi.h>
 #endif	
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -20,15 +12,6 @@ DWORD WINAPI AsyncProcThread::ThreadFunc (PVOID arg)
 void* AsyncProcThread::ThreadFunc(void* arg)
 #endif	
 {
-#if defined(_WIN32) || defined(_WIN64)
-#elif defined(__LINUX__)
-	printf("thread start tid: %lu\n", pthread_self());
-	struct sigaction my_action;
-	my_action.sa_handler = my_handler1;
-	my_action.sa_flags = SA_RESTART;
-	sigaction(SIGUSR1, &my_action, NULL);
-#endif	
-
 	AsyncProcThread* procMgr = (AsyncProcThread*)arg;
 	procMgr->_ThreadStart();
 	return 0;
@@ -158,8 +141,7 @@ void AsyncProcThread::Terminate(void)
 #if defined(_WIN32) || defined(_WIN64)
 	TerminateThread(m_hThread, 0);
 #elif defined(__LINUX__)
-	//pthread_cancel(m_tid);
-	pthread_kill(m_tid, SIGUSR1);
+	pthread_cancel(m_tid);
 #endif	
 
 	m_state = State_None;
@@ -233,6 +215,13 @@ void AsyncProcThread::_ThreadCycle()
 		{
 			_OnExeEnd(APRT_EXCEPTION, e.what());
 		}
+#if defined(__LINUX__)
+		catch (abi::__forced_unwind&) 
+		{
+			printf("AsyncProcThread::__forced_unwind: %d\n", m_customID);
+			throw;
+		}
+#endif
 		catch (...)
 		{
 			_OnExeEnd(APRT_EXCEPTION, NULL);
