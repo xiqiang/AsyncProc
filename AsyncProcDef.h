@@ -6,6 +6,7 @@
 #include <queue>
 
 class AsyncProc;
+class AsyncProcThread;
 
 // Result
 // -----------------

@@ -8,7 +8,7 @@
 #include <pthread.h>
 #endif
 
-#include "AsycProcDef.h"
+#include "AsyncProcDef.h"
 
 class AsyncProc;
 class AsyncProcManager;
@@ -25,7 +25,7 @@ public:
 	};
 
 public:
-	AsyncProcThread(int curstomID);
+	AsyncProcThread(AsyncProcManager* manager, int curstomID);
 	~AsyncProcThread();
 
 public:

@@ -26,7 +26,7 @@ public:
 	void Terminate(void);
 
 	void Schedule(AsyncProc* proc);
-	void TickCallback(void);
+	void CallbackTick(void);
 
 private:
 	void _ClearProcs(void);

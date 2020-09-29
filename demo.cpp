@@ -82,8 +82,7 @@ int main()
 				{
 					for(int i = 0; i < rand() % 5 + 5; ++i) {
 						DemoProc* proc = new DemoProc(procIndex++, rand() % 3000 + 2000);
-						int threadIndex = apm->Enqueue(proc);
-						proc->SetThreadIndex(threadIndex);
+						apm->Schedule(proc);
 						proc->SetCallback(demoProcCallback);
 					}
 				}

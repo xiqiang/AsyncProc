@@ -1,4 +1,6 @@
 #include "AsyncProcThread.h"
+#include "AsyncProcManager.h"
+#include "AsyncProc.h"
 #include <cstdio>
 #include <assert.h>
 
@@ -25,7 +27,7 @@ AsyncProcThread::AsyncProcThread(AsyncProcManager* manager, int customID)
 {
 	printf("AsyncProcThread::AsyncProcThread(addr=%p, customID=%d)\n", this, m_customID);
 	
-	Assert(manager);
+	assert(manager);
 
 #if defined(_WIN32) || defined(_WIN64)
 	InitializeCriticalSection(&m_lock);
@@ -137,8 +139,8 @@ void AsyncProcThread::_ThreadCycle()
 {
 	m_manager->_GetQueueLock();
 	ProcQueue& waitQueue = m_manager->_GetWaitQueue();
-	while(procQueue.size() == 0)
-		_ThreadWaitNewProc();
+	while(waitQueue.size() == 0)
+		m_manager->_ThreadWaitNewProc();
 	
 	m_exeProc = waitQueue.front();
 	assert(m_exeProc);

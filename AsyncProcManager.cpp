@@ -1,4 +1,5 @@
 #include "AsyncProcManager.h"
+#include "AsyncProc.h"
 #include <cstdio>
 #include <assert.h>
 
@@ -46,7 +47,7 @@ void AsyncProcManager::Startup(int threadCount /*= 1*/)
 
 	for(int t = 0; t < threadCount; ++t)
 	{
-		AsyncProcThread* thread = new AsyncProcThread(t);
+		AsyncProcThread* thread = new AsyncProcThread(this, t);
 		if(!thread)
 			break;
 
@@ -117,7 +118,7 @@ void AsyncProcManager::CallbackTick()
 	_GetQueueLock();
 	while(m_doneQueue.size() > 0)
 	{
-		AsyncProcResult result = m_waitQueue.front();
+		AsyncProcResult result = m_doneQueue.front();
 		m_doneQueue.pop();
 
 		if(result.proc)
