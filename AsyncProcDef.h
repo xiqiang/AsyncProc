@@ -2,17 +2,19 @@
 #define AsyncProcCallback_H_Xiqiang_20200901
 
 #include <string>
+#include <vector>
+#include <queue>
 
 class AsyncProc;
 
-// Result struct
+// Result
 // -----------------
 
 enum AsyncProcResultType
 {
 	APRT_FINISH,
 	APRT_EXCEPTION,
-	APRT_TIMEOUT,
+	APRT_TERMINATE,
 };
 
 struct AsyncProcResult
@@ -26,7 +28,7 @@ struct AsyncProcResult
 	std::string what;
 };
 
-// Callback invokers
+// Callback
 // -----------------
 
 typedef void (*AsyncProcCallback)(const AsyncProcResult& result);
@@ -60,5 +62,9 @@ private:
 	T*					m_ptr;
 	MemberFun			m_fun;
 };
+
+typedef std::vector<AsyncProcThread*>	ThreadVector;
+typedef std::queue<AsyncProc*>			ProcQueue;
+typedef std::queue<AsyncProcResult>		ResultQueue;
 
 #endif
