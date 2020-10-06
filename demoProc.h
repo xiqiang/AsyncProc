@@ -36,18 +36,7 @@ public:
 		return m_ms;
 	}
 
-	int GetThreadIndex()
-	{
-		return m_threadIndex;
-	}
-
-	void SetThreadIndex(int threadIndex) 
-    {
-		m_threadIndex = threadIndex;
-	}
-
 private:
 	int m_id;
     unsigned int m_ms;
-	int m_threadIndex;
 };

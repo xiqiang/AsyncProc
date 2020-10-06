@@ -20,8 +20,7 @@ public:
 	{
 		State_None,
 		State_Running,
-		State_Sleeping,
-		State_Stopping,
+		State_Quiting,
 	};
 
 public:
@@ -30,7 +29,8 @@ public:
 
 public:
 	bool Startup(void);
-	void Shutdown(void);
+	void NotifyQuit(void);
+	void QuitWait(void);
 	void Terminate(void);
 
 private:
@@ -41,19 +41,13 @@ private:
 #endif
 
 	void _ThreadStart(void);
-	void _ThreadCycle(void);
 	void _OnExeEnd(AsyncProcResultType type, const char* what);
 
-	void _GetLock(void);
-	void _ReleaseLock(void);
-	
 private:
 #if defined(_WIN32) || defined(_WIN64)
-	CRITICAL_SECTION m_lock;
 	HANDLE m_hThread;
 	DWORD m_tid;
 #elif defined(__LINUX__)
-	pthread_mutex_t m_lock;
 	pthread_t m_tid;
 #endif
 

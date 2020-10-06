@@ -45,7 +45,7 @@ void demoProcCallback(const AsyncProcResult& result)
 {
 	DemoProc* proc = dynamic_cast<DemoProc*>(result.proc);
 	assert(proc);
-	printf("demoProcCallback(time=%d,tid=%d).Execute...%d(%s) :%d\n", proc->GetMilliSeconds(), proc->GetThreadIndex(), result.type, result.what.c_str(), proc->GetID());
+	printf("demoProcCallback(time=%d,tid=%d).Execute...%d(%s) :%d\n", proc->GetMilliSeconds(), result.thread, result.type, result.what.c_str(), proc->GetID());
 }
 
 int main() 

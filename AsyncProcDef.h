@@ -22,11 +22,14 @@ struct AsyncProcResult
 {
 	AsyncProcResult()
 		: proc(NULL)
-		, type(APRT_FINISH) {}
+		, type(APRT_FINISH) 
+		, thread(-1)
+	{}
 
 	AsyncProc* proc;
 	AsyncProcResultType	type;
 	std::string what;
+	int thread;
 };
 
 // Callback

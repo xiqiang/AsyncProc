@@ -24,7 +24,7 @@ AsyncProcManager::~AsyncProcManager()
 
 	_GetThreadLock();
 	if(m_threads.size() > 0)
-		Shutdown();
+		Terminate();
 	_ReleaseThreadLock();
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -63,21 +63,28 @@ void AsyncProcManager::Shutdown(void)
 	printf("AsyncProcManager::Shutdown()\n");
 
 	_GetThreadLock();
+	for (ThreadVector::iterator it = m_threads.begin();
+		it != m_threads.end(); ++it)
+	{
+		(*it)->NotifyQuit();
+	}
+
+#if defined(_WIN32) || defined(_WIN64)
+	WakeAllConditionVariable(&m_condNewProc);
+#elif defined(__LINUX__)
+	pthread_cond_broadcast(&m_condNewProc);
+#endif
+
 	assert(m_threads.size() > 0);
 	for(ThreadVector::iterator it = m_threads.begin();
 		it != m_threads.end(); ++it)
 	{
-		(*it)->Shutdown();
+		(*it)->QuitWait();
 		delete(*it);
 	}
 	m_threads.clear();
 	_ReleaseThreadLock();
-
-#if defined(_WIN32) || defined(_WIN64)
-    WakeAllConditionVariable (&m_condNewProc);	
-#elif defined(__LINUX__)
-	pthread_cond_broadcast(&m_condNewProc); 
-#endif
+	_ClearProcs();
 }
 
 void AsyncProcManager::Terminate(void)
@@ -94,7 +101,6 @@ void AsyncProcManager::Terminate(void)
 	}
 	m_threads.clear();
 	_ReleaseThreadLock();
-
 	_ClearProcs();
 }
 
