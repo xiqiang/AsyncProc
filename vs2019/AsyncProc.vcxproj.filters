@@ -30,6 +30,15 @@
     <ClInclude Include="..\AsyncProcDef.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="..\Mutex.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Condition.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\AutoMutex.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\AsyncProcManager.cpp">

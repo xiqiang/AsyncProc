@@ -1,89 +1,38 @@
 #include "AsyncProcManager.h"
 #include "AsyncProc.h"
 #include <cstdio>
-#include <assert.h>
+
+#include "AutoMutex.h"
 
 AsyncProcManager::AsyncProcManager()
+	: m_idAlloc(0)
+	, m_queueMutex()
+	, m_procCondition(&m_queueMutex)
 {
 	printf("AsyncProcManager(addr=%p)\n", this);
-
-#if defined(_WIN32) || defined(_WIN64)
-	InitializeCriticalSection(&m_lockQueue);
-	InitializeCriticalSection(&m_lockThread);
-	InitializeConditionVariable(&m_condNewProc);
-#elif defined(__LINUX__)
-	pthread_mutex_init(&m_lockQueue, NULL);
-	pthread_mutex_init(&m_lockThread, NULL);
-	pthread_cond_init(&m_condNewProc, NULL);
-#endif	
 }
 
 AsyncProcManager::~AsyncProcManager()
 {
 	printf("AsyncProcManager::~AsyncProcManager()\n");
 
-	_GetThreadLock();
-	if(m_threads.size() > 0)
-		Terminate();
-	_ReleaseThreadLock();
-
-#if defined(_WIN32) || defined(_WIN64)
-	DeleteCriticalSection(&m_lockQueue);
-	DeleteCriticalSection(&m_lockThread);
-#elif defined(__LINUX__)
-	pthread_mutex_destroy(&m_lockQueue);
-	pthread_mutex_destroy(&m_lockThread);
-	pthread_cond_destroy(&m_condNewProc);
-#endif	
+	Terminate();
 }
 
 void AsyncProcManager::Startup(int threadCount /*= 1*/)
 {
 	printf("AsyncProcManager::Startup(threadCount=%d)\n", threadCount);
 
-	_GetThreadLock();
 	assert(threadCount > 0);
-	assert(m_threads.size() == 0);
-
-	for(int t = 0; t < threadCount; ++t)
-	{
-		AsyncProcThread* thread = new AsyncProcThread(this, t);
-		if(!thread)
-			break;
-
-		thread->Startup();
-		m_threads.push_back(thread);
-	}
-
-	_ReleaseThreadLock();
+	for (int t = 0; t < threadCount; ++t)
+		_AddThread();
 }
 
 void AsyncProcManager::Shutdown(void)
 {
 	printf("AsyncProcManager::Shutdown()\n");
 
-	_GetThreadLock();
-	for (ThreadVector::iterator it = m_threads.begin();
-		it != m_threads.end(); ++it)
-	{
-		(*it)->NotifyQuit();
-	}
-
-#if defined(_WIN32) || defined(_WIN64)
-	WakeAllConditionVariable(&m_condNewProc);
-#elif defined(__LINUX__)
-	pthread_cond_broadcast(&m_condNewProc);
-#endif
-
-	assert(m_threads.size() > 0);
-	for(ThreadVector::iterator it = m_threads.begin();
-		it != m_threads.end(); ++it)
-	{
-		(*it)->QuitWait();
-		delete(*it);
-	}
-	m_threads.clear();
-	_ReleaseThreadLock();
+	_ShutdownThreads();
 	_ClearProcs();
 }
 
@@ -91,16 +40,7 @@ void AsyncProcManager::Terminate(void)
 {
 	printf("AsyncProcManager::Terminate()\n");
 
-	_GetThreadLock();
-	assert(m_threads.size() > 0);
-	for(ThreadVector::iterator it = m_threads.begin();
-		it != m_threads.end(); ++it)
-	{
-		(*it)->Terminate();
-		delete(*it);
-	}
-	m_threads.clear();
-	_ReleaseThreadLock();
+	_TerminateThreads();
 	_ClearProcs();
 }
 
@@ -108,20 +48,14 @@ void AsyncProcManager::Schedule(AsyncProc* proc)
 {
 	printf("AsyncProcManager::Schedule(proc=%p)\n", proc);
 
-	_GetQueueLock();
+	AutoMutex am(m_queueMutex);
 	m_waitQueue.push(proc);
-	_ReleaseQueueLock();
-
-#if defined(_WIN32) || defined(_WIN64)
-	WakeConditionVariable (&m_condNewProc);
-#elif defined(__LINUX__)
-	pthread_cond_signal(&m_condNewProc); 
-#endif
+	m_procCondition.Wake();
 }
 
-void AsyncProcManager::CallbackTick()
+void AsyncProcManager::Tick()
 {
-	_GetQueueLock();
+	AutoMutex am(m_queueMutex);
 	while(m_doneQueue.size() > 0)
 	{
 		AsyncProcResult result = m_doneQueue.front();
@@ -133,12 +67,65 @@ void AsyncProcManager::CallbackTick()
 			delete result.proc;
 		}
 	}
-	_ReleaseQueueLock();	
+}
+
+AsyncProcThread* AsyncProcManager::_AddThread(void)
+{
+	printf("AsyncProcManager::_AddThread()\n");
+
+	AutoMutex am(m_threadMutex);
+	AsyncProcThread* thread = new AsyncProcThread(this, m_idAlloc++);
+	if (thread)
+	{
+		thread->Startup();
+		m_threads.push_back(thread);
+	}
+
+	return thread;
+}
+
+void AsyncProcManager::_ShutdownThreads(void)
+{
+	printf("AsyncProcManager::_ShutdownThreads()\n");
+
+	AutoMutex am(m_threadMutex);
+	for (ThreadVector::iterator it = m_threads.begin();
+		it != m_threads.end(); ++it)
+	{
+		(*it)->NotifyQuit();
+	}
+
+	m_procCondition.WakeAll();
+
+	assert(m_threads.size() > 0);
+	for (ThreadVector::iterator it = m_threads.begin();
+		it != m_threads.end(); ++it)
+	{
+		(*it)->QuitWait();
+		delete(*it);
+	}
+	m_threads.clear();
+}
+
+void AsyncProcManager::_TerminateThreads(void)
+{
+	printf("AsyncProcManager::_TerminateThreads()\n");
+
+	AutoMutex am(m_threadMutex);
+	for (ThreadVector::iterator it = m_threads.begin();
+		it != m_threads.end(); ++it)
+	{
+		(*it)->Terminate();
+		delete(*it);
+	}
+	m_threads.clear();
 }
 
 void AsyncProcManager::_ClearProcs(void)
 {
-	_GetQueueLock();
+	printf("AsyncProcManager::_ClearProcs()\n");
+
+	AutoMutex am(m_queueMutex);
 	while(m_waitQueue.size() > 0)
 	{
 		delete m_waitQueue.front();
@@ -150,61 +137,4 @@ void AsyncProcManager::_ClearProcs(void)
 		delete m_doneQueue.front().proc;
 		m_doneQueue.pop();
 	}
-
-	_ReleaseQueueLock();
-}
-
-ProcQueue& AsyncProcManager::_GetWaitQueue(void)
-{
-	return m_waitQueue;
-}
-
-ResultQueue& AsyncProcManager::_GetDoneQueue(void)
-{
-	return m_doneQueue;
-}
-
-void AsyncProcManager::_GetQueueLock(void)
-{
-#if defined(_WIN32) || defined(_WIN64)
-	EnterCriticalSection(&m_lockQueue);
-#elif defined(__LINUX__)
-	pthread_mutex_lock(&m_lockQueue);
-#endif	
-}
-
-void AsyncProcManager::_ReleaseQueueLock(void)
-{
-#if defined(_WIN32) || defined(_WIN64)
-	LeaveCriticalSection(&m_lockQueue);
-#elif defined(__LINUX__)
-	pthread_mutex_unlock(&m_lockQueue);
-#endif	
-}
-
-void AsyncProcManager::_GetThreadLock(void)
-{
-#if defined(_WIN32) || defined(_WIN64)
-	EnterCriticalSection(&m_lockThread);
-#elif defined(__LINUX__)
-	pthread_mutex_lock(&m_lockThread);
-#endif	
-}
-
-void AsyncProcManager::_ReleaseThreadLock(void)
-{
-#if defined(_WIN32) || defined(_WIN64)
-	LeaveCriticalSection(&m_lockThread);
-#elif defined(__LINUX__)
-	pthread_mutex_unlock(&m_lockThread);
-#endif	
-}
-
-void AsyncProcManager::_ThreadWaitNewProc(void)
-{
-#if defined(_WIN32) || defined(_WIN64)
-	SleepConditionVariableCS (&m_condNewProc, &m_lockQueue, INFINITE);
-#elif defined(__LINUX__)
-	pthread_cond_wait(&m_condNewProc, &m_lockQueue); 
-#endif		
 }

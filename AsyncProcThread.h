@@ -16,6 +16,9 @@ class AsyncProcManager;
 class AsyncProcThread
 {
 public:
+	friend class AsyncProcManager;
+
+public:
 	enum State 
 	{
 		State_None,
@@ -23,11 +26,13 @@ public:
 		State_Quiting,
 	};
 
-public:
+private:
 	AsyncProcThread(AsyncProcManager* manager, int curstomID);
-	~AsyncProcThread();
 
 public:
+	~AsyncProcThread();
+
+private:
 	bool Startup(void);
 	void NotifyQuit(void);
 	void QuitWait(void);

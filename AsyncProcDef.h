@@ -14,6 +14,7 @@ class AsyncProcThread;
 enum AsyncProcResultType
 {
 	APRT_FINISH,
+	APRT_TIMEOUT,
 	APRT_EXCEPTION,
 	APRT_TERMINATE,
 };

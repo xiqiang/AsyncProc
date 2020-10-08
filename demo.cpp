@@ -36,7 +36,7 @@ void* CycleThreadProc(void* arg)
 #endif	
 {
 	while(alive)
-		apm->CallbackTick();
+		apm->Tick();
 
 	return 0;
 }

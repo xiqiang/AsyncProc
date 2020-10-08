@@ -8,6 +8,8 @@
 #include <cxxabi.h>
 #endif	
 
+#include "AutoMutex.h"
+
 #if defined(_WIN32) || defined(_WIN64)
 DWORD WINAPI AsyncProcThread::ThreadFunc (PVOID arg)
 #elif defined(__LINUX__)
@@ -107,25 +109,23 @@ void AsyncProcThread::_ThreadStart()
 {
 	while(true)
 	{
-		m_manager->_GetQueueLock();
-		ProcQueue& waitQueue = m_manager->_GetWaitQueue();
-		while (waitQueue.size() == 0 && State_Running == m_state)
-			m_manager->_ThreadWaitNewProc();	// auto release queueLock when sleep
-
-		if (State_Quiting == m_state)
 		{
-			m_manager->_ReleaseQueueLock();
-			break;
+			AutoMutex am(m_manager->GetQueueMutex());
+			ProcQueue& waitQueue = m_manager->GetWaitQueue();
+			while (waitQueue.size() == 0 && State_Running == m_state)
+				m_manager->GetProcCondition().Sleep();					// auto unlock queueMutex when sleep
+
+			if (m_state != State_Running)
+				return;
+
+			m_exeProc = waitQueue.front();								// auto lock queueMutex when wake
+			assert(m_exeProc);
+			waitQueue.pop();
 		}
-
-		m_exeProc = waitQueue.front();			// auto get queueLock when awake
-		assert(m_exeProc);
-
-		waitQueue.pop();
-		m_manager->_ReleaseQueueLock();
 
 		try
 		{
+			m_exeProc->ResetTime();
 			m_exeProc->Execute();
 			_OnExeEnd(APRT_FINISH, NULL);
 		}
@@ -149,7 +149,6 @@ void AsyncProcThread::_ThreadStart()
 
 void AsyncProcThread::_OnExeEnd(AsyncProcResultType type, const char* what)
 {
-	m_manager->_GetQueueLock();
 	AsyncProcResult result;
 	result.proc = m_exeProc;
 	result.type = type;
@@ -157,8 +156,7 @@ void AsyncProcThread::_OnExeEnd(AsyncProcResultType type, const char* what)
 	if(what)
 		result.what = what;
 
-	ResultQueue& doneQueue = m_manager->_GetDoneQueue();
-	doneQueue.push(result);
+	AutoMutex am(m_manager->GetQueueMutex());
+	m_manager->GetDoneQueue().push(result);
 	m_exeProc = NULL;
-	m_manager->_ReleaseQueueLock();
 }
