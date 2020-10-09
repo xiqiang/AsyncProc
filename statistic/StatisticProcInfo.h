@@ -10,7 +10,8 @@ struct StatisticProcInfo
 		, countFinish(0)
 		, countException(0)
 		, costSecondsMax(0.0f)
-		, costSecondsMin(0.0f) {
+		, costSecondsMin(0.0f)
+		, costSecondsTotal(0.0f) {
 	}
 
 	size_t countDone() const {
@@ -18,7 +19,7 @@ struct StatisticProcInfo
 	}
 
 	float costSecondsAverage() const { 
-		return countDone() > 0 ? (costSecondsMax - costSecondsMin) / countDone() : 0.0f;
+		return countDone() > 0 ? costSecondsTotal / countDone() : 0.0f;
 	}
 
 	size_t countScheduled;
@@ -26,6 +27,7 @@ struct StatisticProcInfo
 	size_t countException;
 	float costSecondsMax;
 	float costSecondsMin;
+	float costSecondsTotal;
 };
 
 typedef std::map<std::string, StatisticProcInfo> StatisticProcInfoMap;

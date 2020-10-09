@@ -19,8 +19,8 @@ const int	THREAD_COUNT = 10;
 const int	PROC_COUNT_BASE = 5;
 const int	PROC_COUNT_RAND = 15;
 const float	PROC_BLOCK_TIME_BASE = 0.0f;
-const float	PROC_BLOCK_TIME_RAND = 3.0f;
-const float PROC_ERROR_RATIO = 0.3f;
+const float	PROC_BLOCK_TIME_RAND = 10.0f;
+const float PROC_ERROR_RATIO = 0.5f;
 
 class DemoProc : public StatisticProc {
 public:

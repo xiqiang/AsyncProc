@@ -40,6 +40,8 @@ void StatisticProcManager::OnProcDone(const AsyncProcResult& result)
 	case AsyncProcResult::FINISH:		++spi->countFinish;		break;
 	case AsyncProcResult::EXCEPTION:	++spi->countException;	break;
 	}
+
+	spi->costSecondsTotal += result.costSeconds;
 }
 
 StatisticProcInfo* StatisticProcManager::RetrieveInfo(const std::string& name)
