@@ -19,7 +19,7 @@ const int	THREAD_COUNT = 10;
 const int	PROC_COUNT_BASE = 5;
 const int	PROC_COUNT_RAND = 15;
 const float	PROC_BLOCK_TIME_BASE = 0.0f;
-const float	PROC_BLOCK_TIME_RAND = 10.0f;
+const float	PROC_BLOCK_TIME_RAND = 3.0f;
 const float PROC_ERROR_RATIO = 0.5f;
 
 class DemoProc : public StatisticProc {
@@ -118,13 +118,18 @@ int main()
 		case 's':
 		{
 			printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+			printf("threads:%lu/%lu, doneQueue:%lu, waitQueue:%lu\n",
+				(unsigned long)apm->GetActiveThreadCount(), (unsigned long)apm->GetThreadCount(),
+				(unsigned long)apm->GetDoneQueueSize(), (unsigned long)apm->GetWaitQueueSize());
+
 			StatisticProcInfoMap infoMap;
 			apm->GetStatisticInfos(infoMap);
 			for (StatisticProcInfoMap::iterator
 				it = infoMap.begin(); it != infoMap.end(); ++it)
 			{
 				printf("%s: schedule=%lu, finish=%lu, exception=%lu, cost=%.2f (%.2f-%.2f)\n",
-					it->first.c_str(), it->second.countScheduled, it->second.countFinish, it->second.countException,
+					it->first.c_str(), (unsigned long)it->second.countScheduled,
+					(unsigned long)it->second.countFinish, (unsigned long)it->second.countException,
 					it->second.costSecondsAverage(), it->second.costSecondsMin, it->second.costSecondsMax);
 			}
 			printf("------------------------------------------------------------\n");

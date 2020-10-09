@@ -6,6 +6,7 @@
 AsyncProcManager::AsyncProcManager()
 	: m_queueMutex()
 	, m_procCondition(&m_queueMutex)
+	, m_activeThreadCount(0)
 {
 }
 
@@ -19,14 +20,22 @@ void AsyncProcManager::Startup(int threadCount /*= 1*/)
 
 	assert(threadCount > 0);
 
-	AutoMutex am(m_threadMutex);
+	AutoMutex am_thread(m_threadMutex);
 	for (int t = 0; t < threadCount; ++t)
 	{
 		AsyncProcThread* thread = new AsyncProcThread(this);
-		if (thread)
+		if (!thread)
+			break;
+
+		if (thread->Startup())
 		{
-			thread->Startup();
 			m_threads.push_back(thread);
+			AutoMutex am_queue(m_queueMutex);
+			IncActiveThreadCount();
+		}
+		else
+		{
+			delete thread;
 		}
 	}
 }

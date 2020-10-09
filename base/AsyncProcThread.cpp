@@ -86,14 +86,16 @@ void AsyncProcThread::_Execute()
 			while (waitQueue.size() == 0 && State_Running == m_state)
 			{
 				printf("AsyncProcThread::Sleep(m_tid=%lu)\n", m_tid);
+				m_manager->DecActiveThreadCount();
 				m_manager->GetProcCondition().Sleep();					// Auto unlock queueMutex when sleeped
+				m_manager->IncActiveThreadCount();						// Auto lock queueMutex when awoken
 				printf("AsyncProcThread::Wake(m_tid=%lu)\n", m_tid);
 			}
 
 			if (m_state != State_Running)
 				return;
 
-			m_proc = waitQueue.front();									// Auto lock queueMutex when awoken
+			m_proc = waitQueue.front();
 			assert(m_proc);
 			waitQueue.pop();
 		}

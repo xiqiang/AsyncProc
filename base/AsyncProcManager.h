@@ -26,6 +26,11 @@ public:
 	void Schedule(AsyncProc* proc);
 	void Tick(void);
 
+	size_t GetActiveThreadCount() {
+		AutoMutex am(m_queueMutex);
+		return m_activeThreadCount;
+	}
+
 	size_t GetThreadCount() {
 		AutoMutex am(m_threadMutex);
 		return m_threads.size();
@@ -43,11 +48,11 @@ public:
 
 protected:
 	ProcQueue& GetWaitQueue(void) {
-		return m_waitQueue;
+		return m_waitQueue;					// lock outside
 	}
 
 	ResultQueue& GetDoneQueue(void) {
-		return m_doneQueue;
+		return m_doneQueue;					// lock outside
 	}
 
 	Mutex& GetQueueMutex(void) {
@@ -58,18 +63,28 @@ protected:
 		return m_procCondition;
 	}
 
+	void IncActiveThreadCount() {
+		++m_activeThreadCount;				// lock outside
+	}
+
+	void DecActiveThreadCount() {
+		--m_activeThreadCount;				// lock outside
+	}
+
 private:
 	void _ShutdownThreads(void);
 	void _ClearProcs(void);
 
 private:
 	ThreadVector m_threads;
-	ProcQueue m_waitQueue;
-	ResultQueue m_doneQueue;
-
 	Mutex m_queueMutex;
 	Mutex m_threadMutex;
 	Condition m_procCondition;
+
+	ProcQueue m_waitQueue;
+	ResultQueue m_doneQueue;
+
+	size_t m_activeThreadCount;
 };
 
 #endif
