@@ -25,7 +25,6 @@
     <ClInclude Include="..\AsyncProcThread.h" />
     <ClInclude Include="..\AutoMutex.h" />
     <ClInclude Include="..\Condition.h" />
-    <ClInclude Include="..\demoProc.h" />
     <ClInclude Include="..\Mutex.h" />
   </ItemGroup>
   <ItemGroup>

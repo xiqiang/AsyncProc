@@ -1,13 +1,7 @@
 #ifndef AsyncProcThread_H_Xiqiang_20200831
 #define AsyncProcThread_H_Xiqiang_20200831
 
-#if defined(_WIN32) || defined(_WIN64)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#elif defined(__LINUX__)
-#include <pthread.h>
-#endif
-
+#include <time.h>
 #include "AsyncProcDef.h"
 
 class AsyncProc;
@@ -23,20 +17,19 @@ public:
 	{
 		State_None,
 		State_Running,
-		State_Quiting,
+		State_Quiting
 	};
 
 private:
-	AsyncProcThread(AsyncProcManager* manager, int curstomID);
+	AsyncProcThread(AsyncProcManager* manager);
 
 public:
 	~AsyncProcThread();
 
 private:
 	bool Startup(void);
-	void NotifyQuit(void);
-	void QuitWait(void);
-	void Terminate(void);
+	void ShutdownNotify(void);
+	void ShutdownWait(void);
 
 private:
 #if defined(_WIN32) || defined(_WIN64)
@@ -45,8 +38,8 @@ private:
 	static void* ThreadFunc(void* arg);
 #endif
 
-	void _ThreadStart(void);
-	void _OnExeEnd(AsyncProcResultType type, const char* what);
+	void _Execute(void);
+	void _ProcDone(AsyncProcResult::Type type, const char* what);
 
 private:
 #if defined(_WIN32) || defined(_WIN64)
@@ -57,9 +50,9 @@ private:
 #endif
 
 	AsyncProcManager* m_manager;
-	int m_customID;
 	State m_state;
-	AsyncProc* m_exeProc;	
+	AsyncProc* m_proc;	
+	clock_t m_clock;
 };
 
 #endif

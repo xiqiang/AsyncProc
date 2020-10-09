@@ -17,33 +17,24 @@ void* AsyncProcThread::ThreadFunc(void* arg)
 #endif	
 {
 	AsyncProcThread* procThread = (AsyncProcThread*)arg;
-	procThread->_ThreadStart();
+	procThread->_Execute();
 	return 0;
 }
 
-AsyncProcThread::AsyncProcThread(AsyncProcManager* manager, int customID)
+AsyncProcThread::AsyncProcThread(AsyncProcManager* manager)
 	: m_manager(manager)
-	, m_customID(customID)
 	, m_state(State_None)
-	, m_exeProc(NULL)
+	, m_proc(NULL)
+	, m_clock(0)
 {
-	printf("AsyncProcThread::AsyncProcThread(addr=%p, customID=%d)\n", this, m_customID);
-	
-	assert(manager);	
 }
 
 AsyncProcThread::~AsyncProcThread()
 {
-	printf("AsyncProcThread::~AsyncProcThread()\n");
-
-	if(m_state != State_None)
-		Terminate();
 }
 
 bool AsyncProcThread::Startup(void)
 {
-	printf("AsyncProcThread::Startup()\n");
-
 	assert(State_None == m_state);
 
 	bool ret = false;
@@ -57,21 +48,21 @@ bool AsyncProcThread::Startup(void)
 	if(ret)
 		m_state = State_Running;
 		
+	printf("AsyncProcThread::Startup(thread=%lu)\n", m_tid);
+
 	return ret;
 }
 
-void AsyncProcThread::NotifyQuit(void)
+void AsyncProcThread::ShutdownNotify(void)
 {
-	printf("AsyncProcThread::NotifyQuit(m_customID=%d)...Begin\n", m_customID);
+	printf("AsyncProcThread::NotifyShutdown(m_tid=%lu\n", m_tid);
 
 	assert(m_state != State_None);
 	m_state = State_Quiting;
 }
 
-void AsyncProcThread::QuitWait(void)
+void AsyncProcThread::ShutdownWait(void)
 {
-	printf("AsyncProcThread::QuitWait(m_customID=%d)...Begin\n", m_customID);
-
 #if defined(_WIN32) || defined(_WIN64)
 	WaitForSingleObject(m_hThread, INFINITE);
 	CloseHandle(m_hThread);
@@ -82,30 +73,10 @@ void AsyncProcThread::QuitWait(void)
 
 	m_state = State_None;
 
-	printf("AsyncProcThread::Shutdown(m_customID=%d)...OK\n", m_customID);
+	printf("AsyncProcThread::Quit(m_tid=%lu)\n", m_tid);
 }
 
-void AsyncProcThread::Terminate(void)
-{	
-	printf("AsyncProcThread::Terminate(m_customID=%d)...Begin\n", m_customID);
-
-	assert(m_state != State_None);
-
-#if defined(_WIN32) || defined(_WIN64)
-	TerminateThread(m_hThread, 0);
-#elif defined(__LINUX__)
-	pthread_cancel(m_tid);
-#endif	
-
-	m_state = State_None;
-
-	if(m_exeProc)
-		_OnExeEnd(APRT_TERMINATE, NULL);
-
-	printf("AsyncProcThread::Terminate(m_customID=%d)...OK\n", m_customID);
-}
-
-void AsyncProcThread::_ThreadStart()
+void AsyncProcThread::_Execute()
 {
 	while(true)
 	{
@@ -113,50 +84,55 @@ void AsyncProcThread::_ThreadStart()
 			AutoMutex am(m_manager->GetQueueMutex());
 			ProcQueue& waitQueue = m_manager->GetWaitQueue();
 			while (waitQueue.size() == 0 && State_Running == m_state)
-				m_manager->GetProcCondition().Sleep();					// auto unlock queueMutex when sleep
+			{
+				printf("AsyncProcThread::Sleep(m_tid=%lu)\n", m_tid);
+				m_manager->GetProcCondition().Sleep();					// Auto unlock queueMutex when sleeped
+				printf("AsyncProcThread::Wake(m_tid=%lu)\n", m_tid);
+			}
 
 			if (m_state != State_Running)
 				return;
 
-			m_exeProc = waitQueue.front();								// auto lock queueMutex when wake
-			assert(m_exeProc);
+			m_proc = waitQueue.front();									// Auto lock queueMutex when awoken
+			assert(m_proc);
 			waitQueue.pop();
 		}
 
 		try
 		{
-			m_exeProc->ResetTime();
-			m_exeProc->Execute();
-			_OnExeEnd(APRT_FINISH, NULL);
+			m_clock = clock();
+			m_proc->Execute();
+			_ProcDone(AsyncProcResult::FINISH, NULL);
 		}
 		catch (const std::exception & e)
 		{
-			_OnExeEnd(APRT_EXCEPTION, e.what());
+			_ProcDone(AsyncProcResult::EXCEPTION, e.what());
 		}
 #if defined(__LINUX__)
 		catch (abi::__forced_unwind&)
 		{
-			printf("AsyncProcThread::__forced_unwind(m_customID=%d)\n", m_customID);
+			printf("AsyncProcThread::__forced_unwind(m_tid=%lu)\n", m_tid);
 			throw;
 		}
 #endif
 		catch (...)
 		{
-			_OnExeEnd(APRT_EXCEPTION, NULL);
+			_ProcDone(AsyncProcResult::EXCEPTION, "exception...");
 		}
 	}	
 }
 
-void AsyncProcThread::_OnExeEnd(AsyncProcResultType type, const char* what)
+void AsyncProcThread::_ProcDone(AsyncProcResult::Type type, const char* what)
 {
+	AutoMutex am(m_manager->GetQueueMutex());
 	AsyncProcResult result;
-	result.proc = m_exeProc;
+	result.proc = m_proc;
+	result.costSeconds = (clock() - m_clock) / (float)CLOCKS_PER_SEC;
 	result.type = type;
-	result.thread = m_customID;
+	result.thread = m_tid;
 	if(what)
 		result.what = what;
 
-	AutoMutex am(m_manager->GetQueueMutex());
 	m_manager->GetDoneQueue().push(result);
-	m_exeProc = NULL;
+	m_proc = NULL;
 }

@@ -24,9 +24,6 @@
     <ClInclude Include="..\AsyncProcThread.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\demoProc.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="..\AsyncProcDef.h">
       <Filter>头文件</Filter>
     </ClInclude>

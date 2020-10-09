@@ -5,32 +5,45 @@
 #include <vector>
 #include <queue>
 
+#if defined(_WIN32) || defined(_WIN64)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif defined(__LINUX__)
+#include <pthread.h>
+#endif
+
 class AsyncProc;
 class AsyncProcThread;
 
 // Result
 // -----------------
 
-enum AsyncProcResultType
-{
-	APRT_FINISH,
-	APRT_TIMEOUT,
-	APRT_EXCEPTION,
-	APRT_TERMINATE,
-};
-
 struct AsyncProcResult
 {
+	enum Type
+	{
+		FINISH,
+		EXCEPTION,
+	};
+
 	AsyncProcResult()
 		: proc(NULL)
-		, type(APRT_FINISH) 
+		, costSeconds(0.0f)
+		, type(Type::FINISH)
 		, thread(-1)
 	{}
 
 	AsyncProc* proc;
-	AsyncProcResultType	type;
+	float costSeconds;
+	Type type;
 	std::string what;
-	int thread;
+
+#if defined(_WIN32) || defined(_WIN64)
+	DWORD thread;
+#elif defined(__LINUX__)
+	pthread_t thread;
+#endif
+
 };
 
 // Callback
@@ -64,8 +77,8 @@ public:
 	}
 
 private:
-	T*					m_ptr;
-	MemberFun			m_fun;
+	T*			m_ptr;
+	MemberFun	m_fun;
 };
 
 typedef std::vector<AsyncProcThread*>	ThreadVector;

@@ -5,18 +5,13 @@
 #include "AutoMutex.h"
 
 AsyncProcManager::AsyncProcManager()
-	: m_idAlloc(0)
-	, m_queueMutex()
+	: m_queueMutex()
 	, m_procCondition(&m_queueMutex)
 {
-	printf("AsyncProcManager(addr=%p)\n", this);
 }
 
 AsyncProcManager::~AsyncProcManager()
 {
-	printf("AsyncProcManager::~AsyncProcManager()\n");
-
-	Terminate();
 }
 
 void AsyncProcManager::Startup(int threadCount /*= 1*/)
@@ -24,8 +19,17 @@ void AsyncProcManager::Startup(int threadCount /*= 1*/)
 	printf("AsyncProcManager::Startup(threadCount=%d)\n", threadCount);
 
 	assert(threadCount > 0);
+
+	AutoMutex am(m_threadMutex);
 	for (int t = 0; t < threadCount; ++t)
-		_AddThread();
+	{
+		AsyncProcThread* thread = new AsyncProcThread(this);
+		if (thread)
+		{
+			thread->Startup();
+			m_threads.push_back(thread);
+		}
+	}
 }
 
 void AsyncProcManager::Shutdown(void)
@@ -36,18 +40,8 @@ void AsyncProcManager::Shutdown(void)
 	_ClearProcs();
 }
 
-void AsyncProcManager::Terminate(void)
-{
-	printf("AsyncProcManager::Terminate()\n");
-
-	_TerminateThreads();
-	_ClearProcs();
-}
-
 void AsyncProcManager::Schedule(AsyncProc* proc)
 {
-	printf("AsyncProcManager::Schedule(proc=%p)\n", proc);
-
 	AutoMutex am(m_queueMutex);
 	m_waitQueue.push(proc);
 	m_procCondition.Wake();
@@ -55,33 +49,18 @@ void AsyncProcManager::Schedule(AsyncProc* proc)
 
 void AsyncProcManager::Tick()
 {
-	AutoMutex am(m_queueMutex);
-	while(m_doneQueue.size() > 0)
+	AutoMutex am_queue(m_queueMutex);
+	while (m_doneQueue.size() > 0)
 	{
 		AsyncProcResult result = m_doneQueue.front();
 		m_doneQueue.pop();
 
-		if(result.proc)
+		if (result.proc)
 		{
 			result.proc->InvokeCallback(result);
 			delete result.proc;
 		}
 	}
-}
-
-AsyncProcThread* AsyncProcManager::_AddThread(void)
-{
-	printf("AsyncProcManager::_AddThread()\n");
-
-	AutoMutex am(m_threadMutex);
-	AsyncProcThread* thread = new AsyncProcThread(this, m_idAlloc++);
-	if (thread)
-	{
-		thread->Startup();
-		m_threads.push_back(thread);
-	}
-
-	return thread;
 }
 
 void AsyncProcManager::_ShutdownThreads(void)
@@ -92,7 +71,7 @@ void AsyncProcManager::_ShutdownThreads(void)
 	for (ThreadVector::iterator it = m_threads.begin();
 		it != m_threads.end(); ++it)
 	{
-		(*it)->NotifyQuit();
+		(*it)->ShutdownNotify();
 	}
 
 	m_procCondition.WakeAll();
@@ -101,21 +80,7 @@ void AsyncProcManager::_ShutdownThreads(void)
 	for (ThreadVector::iterator it = m_threads.begin();
 		it != m_threads.end(); ++it)
 	{
-		(*it)->QuitWait();
-		delete(*it);
-	}
-	m_threads.clear();
-}
-
-void AsyncProcManager::_TerminateThreads(void)
-{
-	printf("AsyncProcManager::_TerminateThreads()\n");
-
-	AutoMutex am(m_threadMutex);
-	for (ThreadVector::iterator it = m_threads.begin();
-		it != m_threads.end(); ++it)
-	{
-		(*it)->Terminate();
+		(*it)->ShutdownWait();
 		delete(*it);
 	}
 	m_threads.clear();

@@ -17,7 +17,6 @@ public:
 public:
 	void Startup(int threadCount = 1);
 	void Shutdown(void);
-	void Terminate(void);
 
 	void Schedule(AsyncProc* proc);
 	void Tick(void);
@@ -40,16 +39,13 @@ private:
 	}
 
 private:
-	AsyncProcThread* _AddThread(void);
 	void _ShutdownThreads(void);
-	void _TerminateThreads(void);
 	void _ClearProcs(void);
 
 private:
 	ThreadVector m_threads;
 	ProcQueue m_waitQueue;
 	ResultQueue m_doneQueue;
-	unsigned int m_idAlloc;
 
 	Mutex m_queueMutex;
 	Mutex m_threadMutex;

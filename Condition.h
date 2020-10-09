@@ -43,7 +43,7 @@ public:
 	}
 
 	void Sleep() {
-		pthread_cond_wait(&m_condNewProc, &m_mutex->GetInst());
+		pthread_cond_wait(&m_cond, &m_mutex->GetInst());
 	}
 
 	void Wake() {
