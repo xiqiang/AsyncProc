@@ -13,39 +13,57 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="base">
+      <UniqueIdentifier>{b4179d62-5528-4668-b624-a1538b5a5f99}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="statistic">
+      <UniqueIdentifier>{5a5f1c40-9c45-4b86-a60c-1f73fce4bd8c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\AsyncProc.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\AsyncProcManager.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\AsyncProcThread.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\AsyncProcDef.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Mutex.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Condition.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\AutoMutex.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="..\AsyncProcManager.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="..\AsyncProcThread.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\demo.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="..\base\AsyncProcManager.cpp">
+      <Filter>base</Filter>
+    </ClCompile>
+    <ClCompile Include="..\base\AsyncProcThread.cpp">
+      <Filter>base</Filter>
+    </ClCompile>
+    <ClCompile Include="..\statistic\StatisticProcManager.cpp">
+      <Filter>statistic</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\base\AsyncProc.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\base\AsyncProcDef.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\base\AsyncProcManager.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\base\AsyncProcThread.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\base\AutoMutex.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\base\Condition.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\base\Mutex.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\statistic\StatisticProc.h">
+      <Filter>statistic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\statistic\StatisticProcManager.h">
+      <Filter>statistic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\statistic\StatisticProcInfo.h">
+      <Filter>statistic</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

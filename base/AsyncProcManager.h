@@ -4,6 +4,7 @@
 #include "AsyncProcDef.h"
 #include "AsyncProcThread.h"
 #include "Condition.h"
+#include "AutoMutex.h"
 
 class AsyncProcManager
 {
@@ -15,13 +16,32 @@ public:
 	~AsyncProcManager();
 
 public:
+	virtual void OnProcScheduled(AsyncProc* proc) {}
+	virtual void OnProcDone(const AsyncProcResult& result) {}
+
+public:
 	void Startup(int threadCount = 1);
 	void Shutdown(void);
 
 	void Schedule(AsyncProc* proc);
 	void Tick(void);
 
-private:
+	size_t GetThreadCount() {
+		AutoMutex am(m_threadMutex);
+		return m_threads.size();
+	}
+
+	size_t GetWaitQueueSize() {
+		AutoMutex am(m_queueMutex);
+		return m_waitQueue.size();
+	}
+
+	size_t GetDoneQueueSize() {
+		AutoMutex am(m_queueMutex);
+		return m_doneQueue.size();
+	}
+
+protected:
 	ProcQueue& GetWaitQueue(void) {
 		return m_waitQueue;
 	}

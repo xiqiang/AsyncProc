@@ -1,18 +1,11 @@
 CPPFLAGS = -g -Wall -pthread -D __LINUX__
 LDFLAGS = -g -Wall -pthread
 LDLIBS = -lThread
+SRCS := $(wildcard *.cpp) $(wildcard base/*.cpp) $(wildcard statistic/*.cpp)
+OBJS := $(patsubst %.cpp, %.o, $(SRCS))
 
-demo: demo.o AsyncProcManager.o AsyncProcThread.o
-	g++ $(LDFLAGS) -o demo demo.o AsyncProcManager.o AsyncProcThread.o
-
-demo.o: demo.cpp
-	g++ $(CPPFLAGS) -c demo.cpp
-	
-AsyncProcManager.o: AsyncProcManager.cpp
-	g++ $(CPPFLAGS) -c AsyncProcManager.cpp
-
-AsyncProcThread.o: AsyncProcThread.cpp
-	g++ $(CPPFLAGS) -c AsyncProcThread.cpp
+demo: $(OBJS)
+	g++ $(LDFLAGS) -o demo $(OBJS)
 
 clean:
 	rm -f *.o

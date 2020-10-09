@@ -19,18 +19,22 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\AsyncProc.h" />
-    <ClInclude Include="..\AsyncProcDef.h" />
-    <ClInclude Include="..\AsyncProcManager.h" />
-    <ClInclude Include="..\AsyncProcThread.h" />
-    <ClInclude Include="..\AutoMutex.h" />
-    <ClInclude Include="..\Condition.h" />
-    <ClInclude Include="..\Mutex.h" />
+    <ClCompile Include="..\base\AsyncProcManager.cpp" />
+    <ClCompile Include="..\base\AsyncProcThread.cpp" />
+    <ClCompile Include="..\demo.cpp" />
+    <ClCompile Include="..\statistic\StatisticProcManager.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\AsyncProcManager.cpp" />
-    <ClCompile Include="..\AsyncProcThread.cpp" />
-    <ClCompile Include="..\demo.cpp" />
+    <ClInclude Include="..\base\AsyncProc.h" />
+    <ClInclude Include="..\base\AsyncProcDef.h" />
+    <ClInclude Include="..\base\AsyncProcManager.h" />
+    <ClInclude Include="..\base\AsyncProcThread.h" />
+    <ClInclude Include="..\base\AutoMutex.h" />
+    <ClInclude Include="..\base\Condition.h" />
+    <ClInclude Include="..\base\Mutex.h" />
+    <ClInclude Include="..\statistic\StatisticProc.h" />
+    <ClInclude Include="..\statistic\StatisticProcInfo.h" />
+    <ClInclude Include="..\statistic\StatisticProcManager.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

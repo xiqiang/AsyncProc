@@ -2,7 +2,6 @@
 #include "AsyncProc.h"
 #include <cstdio>
 
-#include "AutoMutex.h"
 
 AsyncProcManager::AsyncProcManager()
 	: m_queueMutex()
@@ -45,6 +44,7 @@ void AsyncProcManager::Schedule(AsyncProc* proc)
 	AutoMutex am(m_queueMutex);
 	m_waitQueue.push(proc);
 	m_procCondition.Wake();
+	OnProcScheduled(proc);
 }
 
 void AsyncProcManager::Tick()
@@ -57,6 +57,7 @@ void AsyncProcManager::Tick()
 
 		if (result.proc)
 		{
+			OnProcDone(result);
 			result.proc->InvokeCallback(result);
 			delete result.proc;
 		}
