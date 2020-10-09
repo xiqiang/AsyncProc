@@ -6,7 +6,7 @@ void StatisticProcManager::OnProcScheduled(AsyncProc* proc)
 	StatisticProc* sProc = dynamic_cast<StatisticProc*>(proc);
 	assert(sProc);
 
-	StatisticProcInfo* spi = RetrieveInfo(sProc->GetName());
+	StatisticProcInfo* spi = ObtainInfo(sProc->GetName());
 	if (!spi)
 		return;
 
@@ -18,7 +18,7 @@ void StatisticProcManager::OnProcDone(const AsyncProcResult& result)
 	StatisticProc* sProc = dynamic_cast<StatisticProc*>(result.proc);
 	assert(sProc);
 
-	StatisticProcInfo* spi = RetrieveInfo(sProc->GetName());
+	StatisticProcInfo* spi = ObtainInfo(sProc->GetName());
 	if (!spi)
 		return;
 
@@ -44,7 +44,7 @@ void StatisticProcManager::OnProcDone(const AsyncProcResult& result)
 	spi->costSecondsTotal += result.costSeconds;
 }
 
-StatisticProcInfo* StatisticProcManager::RetrieveInfo(const std::string& name)
+StatisticProcInfo* StatisticProcManager::ObtainInfo(const std::string& name)
 {
 	StatisticProcInfoMap::iterator it = m_infoMap.find(name);
 	if (it != m_infoMap.end())

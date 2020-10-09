@@ -24,7 +24,7 @@ public:
 	}
 
 private:
-	StatisticProcInfo* RetrieveInfo(const std::string& name);
+	StatisticProcInfo* ObtainInfo(const std::string& name);
 
 private:
 	StatisticProcInfoMap m_infoMap;
