@@ -149,7 +149,7 @@ void AsyncProcThread::_ProcDone(AsyncProcResult::Type type, const char* what)
 	}
 	else
 	{
-		m_manager->OnProcDone(result);
+		m_manager->NotifyProcDone(result);
 	}
 
 	m_proc = NULL;

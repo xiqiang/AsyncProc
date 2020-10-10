@@ -15,16 +15,18 @@
 #include "statistic/StatisticProc.h"
 #include "statistic/StatisticProcManager.h"
 
-const int	THREAD_COUNT = 300;
-const int	PROC_COUNT_MIN = 50;
-const int	PROC_COUNT_MAX = 150;
+const int	WORK_THREAD_COUNT = 500;
+const int	TICK_THREAD_COUNT = 10;
+
+const float AUTO_SCHEDULE_SECONDS_MIN = 0.0f;
+const float AUTO_SCHEDULE_SECONDS_MAX = 1.0f;
+
+const int	NEW_PROC_COUNT_MIN = 0;
+const int	NEW_PROC_COUNT_MAX = 100;
+
+const float	PROC_SLEEP_SECONDS_MIN = 0.0f;
+const float	PROC_SLEEP_SECONDS_MAX = 1.0f;
 const float PROC_ERROR_RATIO = 0.5f;
-
-const float	PROC_BLOCK_SECONDS_MIN = 0.0f;
-const float	PROC_BLOCK_SECONDS_MAX = 3.0f;
-
-const float SCHEDULE_SECONDS_MIN = 0.0f;
-const float SCHEDULE_SECONDS_MAX = 1.0f;
 
 class DemoProc : public StatisticProc {
 public:
@@ -81,9 +83,9 @@ void demoProcCallback(const AsyncProcResult& result)
 
 void Schedule(const char* name, bool hasCallback) 
 {
-	int count = RangeRand(PROC_COUNT_MIN, PROC_COUNT_MAX);
+	int count = RangeRand(NEW_PROC_COUNT_MIN, NEW_PROC_COUNT_MAX);
 	for (int i = 0; i < count; ++i) {
-		float duration = RangeRand(PROC_BLOCK_SECONDS_MIN, PROC_BLOCK_SECONDS_MAX);
+		float duration = RangeRand(PROC_SLEEP_SECONDS_MIN, PROC_SLEEP_SECONDS_MAX);
 		DemoProc* proc = new DemoProc(name, duration, PROC_ERROR_RATIO);
 
 		if (hasCallback)
@@ -99,17 +101,21 @@ DWORD WINAPI CycleThreadProc(PVOID arg)
 void* CycleThreadProc(void* arg)
 #endif	
 {
+	char* name = (char*)arg;
 	clock_t nextClock = clock();
+
 	while (alive)
 	{
 		clock_t curClock = clock();
 		if (autoSchedule && nextClock <= curClock)
 		{
-			Schedule("Cycle", true);
-			nextClock = curClock + (clock_t)(RangeRand(SCHEDULE_SECONDS_MIN, SCHEDULE_SECONDS_MAX) * CLOCKS_PER_SEC);
+			Schedule(name, true);
+			nextClock = curClock + (clock_t)(RangeRand(AUTO_SCHEDULE_SECONDS_MIN, AUTO_SCHEDULE_SECONDS_MAX) * CLOCKS_PER_SEC);
 		}
 		apm->Tick();
 	}
+
+	delete name;
 	return 0;
 }
 
@@ -127,14 +133,21 @@ int main()
 
 	srand(clock());
 	apm = new StatisticProcManager();
-	apm->Startup(THREAD_COUNT);
+	apm->Startup(WORK_THREAD_COUNT);
 	alive = true;
 
+	for (int i = 0; i < TICK_THREAD_COUNT; ++i)
+	{
+		char* name = new char[32];
+		name[0] = '\0';
+		sprintf(name, "cycle-%d", i);
+
 #if defined(_WIN32) || defined(_WIN64)
-	cycleHandle = CreateThread(NULL, 0, CycleThreadProc, NULL, 0, &cycleThreadId);
+		cycleHandle = CreateThread(NULL, 0, CycleThreadProc, (PVOID)name, 0, &cycleThreadId);
 #elif defined(__LINUX__)
-	pthread_create(&cycleThreadId, NULL, CycleThreadProc, NULL);
+		pthread_create(&cycleThreadId, NULL, CycleThreadProc, (void*)name);
 #endif
+	}
 
 	while (alive)
 	{

@@ -88,17 +88,16 @@ private:
 	void _ClearProcs(void);
 
 private:
-	ThreadVector m_threads;
 	size_t m_activeThreadCount;
+	ThreadVector m_threads;
 	Mutex m_threadMutex;
 
 	ProcQueue m_waitQueue;
 	Mutex m_waitQueueMutex;
+	Condition m_procCondition;
 
 	ResultQueueMap m_callbackQueueMap;
 	Mutex m_callbackQueueMutex;
-
-	Condition m_procCondition;
 };
 
 #endif

@@ -3,9 +3,9 @@
 
 
 AsyncProcManager::AsyncProcManager()
-	: m_waitQueueMutex()
+	: m_activeThreadCount(0)
+	, m_waitQueueMutex()
 	, m_procCondition(&m_waitQueueMutex)
-	, m_activeThreadCount(0)
 {
 }
 
