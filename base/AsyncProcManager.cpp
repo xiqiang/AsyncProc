@@ -126,7 +126,7 @@ void AsyncProcManager::_ShutdownThreads(void)
 		it != m_threads.end(); ++it)
 	{
 		(*it)->ShutdownWait();
-		delete(*it);
+		delete *it;
 	}
 	m_threads.clear();
 }
