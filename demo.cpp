@@ -16,13 +16,13 @@
 #include "statistic/StatisticProcManager.h"
 
 const int	WORK_THREAD_COUNT = 500;
-const int	TICK_THREAD_COUNT = 10;
+const int	TICK_THREAD_COUNT = 100;
 
 const float AUTO_SCHEDULE_SECONDS_MIN = 0.0f;
 const float AUTO_SCHEDULE_SECONDS_MAX = 1.0f;
 
 const int	NEW_PROC_COUNT_MIN = 0;
-const int	NEW_PROC_COUNT_MAX = 100;
+const int	NEW_PROC_COUNT_MAX = 10;
 
 const float	PROC_SLEEP_SECONDS_MIN = 0.0f;
 const float	PROC_SLEEP_SECONDS_MAX = 1.0f;
@@ -81,14 +81,14 @@ void demoProcCallback(const AsyncProcResult& result)
 	//printf("demoProcCallback(proc=%p, thread=%lu, costSeconds=%f, result=%d, what=%s)\n", proc, result.thread_id, result.costSeconds, result.type, result.what.c_str());
 }
 
-void Schedule(const char* name, bool hasCallback) 
+void Schedule(const char* name) 
 {
 	int count = RangeRand(NEW_PROC_COUNT_MIN, NEW_PROC_COUNT_MAX);
 	for (int i = 0; i < count; ++i) {
 		float duration = RangeRand(PROC_SLEEP_SECONDS_MIN, PROC_SLEEP_SECONDS_MAX);
 		DemoProc* proc = new DemoProc(name, duration, PROC_ERROR_RATIO);
 
-		if (hasCallback)
+		if (rand() % 2 == 0)
 			apm->Schedule(proc, demoProcCallback);
 		else
 			apm->Schedule(proc);
@@ -134,7 +134,7 @@ void* CycleThreadProc(void* arg)
 		clock_t curClock = clock();
 		if (autoSchedule && nextClock <= curClock)
 		{
-			Schedule(name, true);
+			Schedule(name);
 			nextClock = curClock + (clock_t)(RangeRand(AUTO_SCHEDULE_SECONDS_MIN, AUTO_SCHEDULE_SECONDS_MAX) * CLOCKS_PER_SEC);
 		}
 		apm->Tick();
@@ -197,7 +197,7 @@ int main()
 		{
 			char name[16] = { 0 };
 			sprintf(name, "demo-%c", c);
-			Schedule(name, false);
+			Schedule(name);
 		}
 		break;
 		}
