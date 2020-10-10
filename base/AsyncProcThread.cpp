@@ -28,7 +28,7 @@ AsyncProcThread::AsyncProcThread(AsyncProcManager* manager)
 	, m_proc(NULL)
 	, m_clock(0)
 #if defined(_WIN32) || defined(_WIN64)
-	, m_hThread(NULL)
+	, m_hThread(INVALID_HANDLE_VALUE)
 #endif
 {
 }
@@ -75,6 +75,7 @@ void AsyncProcThread::ShutdownWait(void)
 	pthread_join(m_tid, NULL);
 #endif
 
+	m_tid = 0;
 	m_state = State_None;
 
 	//printf("AsyncProcThread::Quit(m_tid=%lu)\n", m_tid);

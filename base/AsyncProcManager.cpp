@@ -11,6 +11,7 @@ AsyncProcManager::AsyncProcManager()
 
 AsyncProcManager::~AsyncProcManager()
 {
+	Shutdown();
 }
 
 void AsyncProcManager::Startup(int threadCount /*= 1*/)
@@ -124,6 +125,9 @@ void AsyncProcManager::_ShutdownThreads(void)
 	//printf("AsyncProcManager::_ShutdownThreads()\n");
 
 	AutoMutex am(m_threadMutex);
+	if (m_threads.size() == 0)
+		return;
+
 	for (ThreadVector::iterator it = m_threads.begin();
 		it != m_threads.end(); ++it)
 	{
