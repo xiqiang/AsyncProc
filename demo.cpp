@@ -54,10 +54,10 @@ private:
 };
 
 #if defined(_WIN32) || defined(_WIN64)
-DWORD cycleThreadId = 0;
-HANDLE cycleHandle = NULL;
+DWORD cycleThreadId[TICK_THREAD_COUNT];
+HANDLE cycleHandle[TICK_THREAD_COUNT];
 #elif defined(__LINUX__)
-pthread_t cycleThreadId;
+pthread_t cycleThreadId[TICK_THREAD_COUNT];
 #endif
 
 StatisticProcManager* apm = NULL;
@@ -93,6 +93,31 @@ void Schedule(const char* name, bool hasCallback)
 		else
 			apm->Schedule(proc);
 	}
+}
+
+void ShowStatistics()
+{
+	printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+	printf("threads: %lu/%lu, waitQueue:%lu\n", (unsigned long)apm->GetActiveThreadCount(),
+		(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitQueueSize());
+
+	ResultQueueMap resultQueueMap;
+	apm->GetCallbackQueueMap(resultQueueMap);
+	for (ResultQueueMap::iterator it = resultQueueMap.begin(); it != resultQueueMap.end(); ++it)
+	{
+		printf("resultQueue[%lu].size = %lu\n", (unsigned long)it->first, (unsigned long)it->second.size());
+	}
+
+	StatisticProcInfoMap infoMap;
+	apm->GetStatisticInfos(infoMap);
+	for (StatisticProcInfoMap::iterator it = infoMap.begin(); it != infoMap.end(); ++it)
+	{
+		printf("%s: proc=%lu/%lu (%luok, %luerror), cost=%.2f (%.2f-%.2f)\n",
+			it->first.c_str(), (unsigned long)it->second.countDone(), (unsigned long)it->second.countScheduled,
+			(unsigned long)it->second.countFinish, (unsigned long)it->second.countException,
+			it->second.costSecondsAverage(), it->second.costSecondsMin, it->second.costSecondsMax);
+	}
+	printf("------------------------------------------------------------\n");
 }
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -143,9 +168,9 @@ int main()
 		sprintf(name, "cycle-%d", i);
 
 #if defined(_WIN32) || defined(_WIN64)
-		cycleHandle = CreateThread(NULL, 0, CycleThreadProc, (PVOID)name, 0, &cycleThreadId);
+		cycleHandle[i] = CreateThread(NULL, 0, CycleThreadProc, (PVOID)name, 0, &cycleThreadId[i]);
 #elif defined(__LINUX__)
-		pthread_create(&cycleThreadId, NULL, CycleThreadProc, (void*)name);
+		pthread_create(&cycleThreadId[i], NULL, CycleThreadProc, (void*)name);
 #endif
 	}
 
@@ -163,41 +188,11 @@ int main()
 			autoSchedule = false;
 			break;
 		case 'q':
-		{
-			apm->Shutdown();
 			alive = false;
-#if defined(_WIN32) || defined(_WIN64)
-			WaitForSingleObject(cycleHandle, INFINITE);
-#elif defined(__LINUX__)
-			pthread_join(cycleThreadId, NULL);
-#endif			
-		}
-		break;
+			break;
 		case 's':
-		{
-			printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-			printf("threads: %lu/%lu, waitQueue:%lu\n", (unsigned long)apm->GetActiveThreadCount(), 
-				(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitQueueSize());
-
-			ResultQueueMap resultQueueMap;
-			apm->GetCallbackQueueMap(resultQueueMap);
-			for (ResultQueueMap::iterator it = resultQueueMap.begin(); it != resultQueueMap.end(); ++it)
-			{
-				printf("resultQueue[%lu].size = %lu\n", (unsigned long)it->first, (unsigned long)it->second.size());
-			}
-
-			StatisticProcInfoMap infoMap;
-			apm->GetStatisticInfos(infoMap);
-			for (StatisticProcInfoMap::iterator it = infoMap.begin(); it != infoMap.end(); ++it)
-			{
-				printf("%s: proc=%lu/%lu (%luok, %luerror), cost=%.2f (%.2f-%.2f)\n",
-					it->first.c_str(), (unsigned long)it->second.countDone(), (unsigned long)it->second.countScheduled,
-					(unsigned long)it->second.countFinish, (unsigned long)it->second.countException,
-					it->second.costSecondsAverage(), it->second.costSecondsMin, it->second.costSecondsMax);
-			}
-			printf("------------------------------------------------------------\n");
-		}
-		break;
+			ShowStatistics();
+			break;
 		default:
 		{
 			char name[16] = { 0 };
@@ -208,13 +203,21 @@ int main()
 		}
 	}
 
+	for (int i = 0; i < TICK_THREAD_COUNT; ++i)
+	{
+#if defined(_WIN32) || defined(_WIN64)
+		WaitForSingleObject(cycleHandle[i], INFINITE);
+		CloseHandle(cycleHandle[i]);
+#elif defined(__LINUX__)
+		pthread_join(cycleThreadId[i], NULL);
+#endif			
+	}
+
+	apm->Shutdown();
 	delete apm;
-	printf("main exit.\n");
 
 #if defined(_WIN32) || defined(_WIN64)		
-	CloseHandle(cycleHandle);
 	_CrtDumpMemoryLeaks();
-#elif defined(__LINUX__)
 #endif	
 
 	return 0;
