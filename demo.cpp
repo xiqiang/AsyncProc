@@ -98,15 +98,13 @@ void Schedule(const char* name)
 void ShowStatistics()
 {
 	printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-	printf("threads: %lu/%lu, waitQueue:%lu\n", (unsigned long)apm->GetActiveThreadCount(),
-		(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitQueueSize());
+	printf("threads: %lu/%lu, waitDeque:%lu\n", (unsigned long)apm->GetActiveThreadCount(),
+		(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitDequeSize());
 
-	ResultQueueMap resultQueueMap;
-	apm->GetCallbackQueueMap(resultQueueMap);
-	for (ResultQueueMap::iterator it = resultQueueMap.begin(); it != resultQueueMap.end(); ++it)
-	{
-		printf("resultQueue[%lu].size = %lu\n", (unsigned long)it->first, (unsigned long)it->second.size());
-	}
+	ResultDequeMap resultDequeMap;
+	apm->GetCallbackDequeMap(resultDequeMap);
+	for (ResultDequeMap::iterator it = resultDequeMap.begin(); it != resultDequeMap.end(); ++it)
+		printf("resultDeque[%lu].size = %lu\n", (unsigned long)it->first, (unsigned long)it->second.size());
 
 	StatisticProcInfoMap infoMap;
 	apm->GetStatisticInfos(infoMap);
@@ -148,9 +146,10 @@ int main()
 {
 	printf(
 		"\n======================================================================\n"
-		"<any char> = shedule procs\n"
+		"<any char> = manual shedule\n"
+		"'t' = manual tick\n"
 		"'o' = auto schedule on\n"
-		"'o' = auto schedule off\n"
+		"'f' = auto schedule off\n"
 		"'q' = exit\n"
 		"'s' = statistic\n"
 		"======================================================================\n\n"
@@ -180,6 +179,9 @@ int main()
 		switch (c)
 		{
 		case '\n':
+			break;
+		case 't':
+			apm->Tick();
 			break;
 		case 'o':
 			autoSchedule = true;

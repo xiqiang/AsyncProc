@@ -86,23 +86,23 @@ void AsyncProcThread::_Execute()
 	while(true)
 	{
 		{
-			AutoMutex am(m_manager->GetWaitQueueMutex());
-			ProcQueue& waitQueue = m_manager->GetWaitQueue();
-			while (waitQueue.size() == 0 && State_Running == m_state)
+			AutoMutex am(m_manager->GetWaitDequeMutex());
+			ProcDeque& waitDeque = m_manager->GetWaitDeque();
+			while (waitDeque.empty() && State_Running == m_state)
 			{
 				//printf("AsyncProcThread::Sleep(m_tid=%lu)\n", m_tid);
 				m_manager->DecActiveThreadCount();
-				m_manager->GetProcCondition().Sleep();					// Auto unlock queueMutex when sleeped
-				m_manager->IncActiveThreadCount();						// Auto lock queueMutex when awoken
+				m_manager->GetProcCondition().Sleep();					// Auto unlock dequeMutex when sleeped
+				m_manager->IncActiveThreadCount();						// Auto lock dequeMutex when awoken
 				//printf("AsyncProcThread::Wake(m_tid=%lu)\n", m_tid);
 			}
 
 			if (m_state != State_Running)
 				return;
 
-			m_proc = waitQueue.front();
+			m_proc = waitDeque.front();
 			assert(m_proc);
-			waitQueue.pop();
+			waitDeque.pop_front();
 		}
 
 		try
@@ -139,14 +139,14 @@ void AsyncProcThread::_ProcDone(AsyncProcResult::Type type, const char* what)
 	if(what)
 		result.what = what;
 
-	AutoMutex am(m_manager->GetCallbackQueueMutex());
+	AutoMutex am(m_manager->GetCallbackDequeMutex());
 	if (m_proc->HasCallback())
 	{
-		ResultQueue* resultQueue = m_manager->GetCallbackQueue(m_proc->GetScheduleThreadId());
-		if (!resultQueue)
+		ResultDeque* resultDeque = m_manager->GetCallbackDeque(m_proc->GetScheduleThreadId());
+		if (!resultDeque)
 			return;
 
-		resultQueue->push(result);
+		resultDeque->push_back(result);
 	}
 	else
 	{

@@ -38,10 +38,10 @@ public:
 		Schedule(proc);
 	}
 
-	void GetCallbackQueueMap(ResultQueueMap& outResultQueueMap);
+	void GetCallbackDequeMap(ResultDequeMap& outResultDequeMap);
 
 	size_t GetActiveThreadCount() {
-		AutoMutex am(m_waitQueueMutex);
+		AutoMutex am(m_waitDequeMutex);
 		return m_activeThreadCount;
 	}
 
@@ -50,25 +50,25 @@ public:
 		return m_threads.size();
 	}
 
-	size_t GetWaitQueueSize() {
-		AutoMutex am(m_waitQueueMutex);
-		return m_waitQueue.size();
+	size_t GetWaitDequeSize() {
+		AutoMutex am(m_waitDequeMutex);
+		return m_waitDeque.size();
 	}
 
 private:
 	void NotifyProcDone(const AsyncProcResult& result);
-	ResultQueue* GetCallbackQueue(AP_Thread thread_id);
+	ResultDeque* GetCallbackDeque(AP_Thread thread_id);
 
-	ProcQueue& GetWaitQueue(void) {
-		return m_waitQueue;					// lock outside
+	ProcDeque& GetWaitDeque(void) {
+		return m_waitDeque;					// lock outside
 	}
 
-	Mutex& GetWaitQueueMutex(void) {
-		return m_waitQueueMutex;
+	Mutex& GetWaitDequeMutex(void) {
+		return m_waitDequeMutex;
 	}
 
-	Mutex& GetCallbackQueueMutex(void) {
-		return m_callbackQueueMutex;
+	Mutex& GetCallbackDequeMutex(void) {
+		return m_callbackDequeMutex;
 	}
 
 	Condition& GetProcCondition(void) {
@@ -92,12 +92,12 @@ private:
 	ThreadVector m_threads;
 	Mutex m_threadMutex;
 
-	ProcQueue m_waitQueue;
-	Mutex m_waitQueueMutex;
+	ProcDeque m_waitDeque;
+	Mutex m_waitDequeMutex;
 	Condition m_procCondition;
 
-	ResultQueueMap m_callbackQueueMap;
-	Mutex m_callbackQueueMutex;
+	ResultDequeMap m_callbackDequeMap;
+	Mutex m_callbackDequeMutex;
 };
 
 #endif
