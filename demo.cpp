@@ -112,7 +112,7 @@ void ShowStatistics()
 	apm->GetStatisticInfos(infoMap);
 	for (StatisticProcInfoMap::iterator it = infoMap.begin(); it != infoMap.end(); ++it)
 	{
-		printf("%s: proc=%lu/%lu (%luok, %luerror), cost=%.2f (%.2f-%.2f)\n",
+		printf("%s: proc=%lu/%lu (%luok, %luerr), cost=%.2f (%.2f-%.2f)\n",
 			it->first.c_str(), (unsigned long)it->second.countDone(), (unsigned long)it->second.countScheduled,
 			(unsigned long)it->second.countFinish, (unsigned long)it->second.countException,
 			it->second.costSecondsAverage(), it->second.costSecondsMin, it->second.costSecondsMax);

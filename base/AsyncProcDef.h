@@ -40,7 +40,7 @@ struct AsyncProcResult
 	AsyncProcResult()
 		: proc(NULL)
 		, costSeconds(0.0f)
-		, type(Type::FINISH)
+		, type(FINISH)
 		, thread_id(-1)
 	{}
 
