@@ -15,12 +15,16 @@
 #include "statistic/StatisticProc.h"
 #include "statistic/StatisticProcManager.h"
 
-const int	THREAD_COUNT = 10;
-const int	PROC_COUNT_BASE = 5;
-const int	PROC_COUNT_RAND = 15;
-const float	PROC_BLOCK_TIME_BASE = 0.0f;
-const float	PROC_BLOCK_TIME_RAND = 3.0f;
+const int	THREAD_COUNT = 300;
+const int	PROC_COUNT_MIN = 50;
+const int	PROC_COUNT_MAX = 150;
 const float PROC_ERROR_RATIO = 0.5f;
+
+const float	PROC_BLOCK_SECONDS_MIN = 0.0f;
+const float	PROC_BLOCK_SECONDS_MAX = 3.0f;
+
+const float SCHEDULE_SECONDS_MIN = 0.0f;
+const float SCHEDULE_SECONDS_MAX = 1.0f;
 
 class DemoProc : public StatisticProc {
 public:
@@ -28,15 +32,14 @@ public:
 		: StatisticProc(name)
 		, m_duration(duration)
 		, m_errRatio(errRatio) {
-		printf("DemoProc::DemoProc(proc=%p, time=%f)\n", this, m_duration);
+		//printf("DemoProc::DemoProc(proc=%p, time=%f)\n", this, m_duration);
 	}
 
 	virtual void Execute(void) {
+		//printf("DemoProc::Execute(proc=%p, thread=%lu)\n", this, (unsigned long)AP_GetThreadId());
 #if defined(_WIN32) || defined(_WIN64)
-		printf("DemoProc::Execute(proc=%p, thread=%lu)\n", this, GetCurrentThreadId());
 		Sleep((DWORD)(m_duration * 1000));
 #elif defined(__LINUX__)
-		printf("DemoProc::Execute(proc=%p, thread=%lu)\n", this, pthread_self());
 		usleep((useconds_t)(m_duration * 1000 * 1000));
 #endif
 		if (rand() / (float)RAND_MAX <= m_errRatio)
@@ -49,14 +52,46 @@ private:
 };
 
 #if defined(_WIN32) || defined(_WIN64)
-DWORD cycleThreadId;
-HANDLE cycleHandle;
+DWORD cycleThreadId = 0;
+HANDLE cycleHandle = NULL;
 #elif defined(__LINUX__)
 pthread_t cycleThreadId;
 #endif
 
-StatisticProcManager* apm;
-bool alive;
+StatisticProcManager* apm = NULL;
+bool alive = false;
+bool autoSchedule = true;
+
+int RangeRand(int min, int max)
+{
+	return rand() % (max - min) + min;
+}
+
+float RangeRand(float min, float max)
+{
+	return rand() / (float)RAND_MAX * (max - min) + min;
+}
+
+void demoProcCallback(const AsyncProcResult& result)
+{
+	DemoProc* proc = dynamic_cast<DemoProc*>(result.proc);
+	assert(proc);
+	//printf("demoProcCallback(proc=%p, thread=%lu, costSeconds=%f, result=%d, what=%s)\n", proc, result.thread_id, result.costSeconds, result.type, result.what.c_str());
+}
+
+void Schedule(const char* name, bool hasCallback) 
+{
+	int count = RangeRand(PROC_COUNT_MIN, PROC_COUNT_MAX);
+	for (int i = 0; i < count; ++i) {
+		float duration = RangeRand(PROC_BLOCK_SECONDS_MIN, PROC_BLOCK_SECONDS_MAX);
+		DemoProc* proc = new DemoProc(name, duration, PROC_ERROR_RATIO);
+
+		if (hasCallback)
+			apm->Schedule(proc, demoProcCallback);
+		else
+			apm->Schedule(proc);
+	}
+}
 
 #if defined(_WIN32) || defined(_WIN64)
 DWORD WINAPI CycleThreadProc(PVOID arg)
@@ -64,16 +99,18 @@ DWORD WINAPI CycleThreadProc(PVOID arg)
 void* CycleThreadProc(void* arg)
 #endif	
 {
+	clock_t nextClock = clock();
 	while (alive)
+	{
+		clock_t curClock = clock();
+		if (autoSchedule && nextClock <= curClock)
+		{
+			Schedule("Cycle", true);
+			nextClock = curClock + (clock_t)(RangeRand(SCHEDULE_SECONDS_MIN, SCHEDULE_SECONDS_MAX) * CLOCKS_PER_SEC);
+		}
 		apm->Tick();
+	}
 	return 0;
-}
-
-void demoProcCallback(const AsyncProcResult& result)
-{
-	DemoProc* proc = dynamic_cast<DemoProc*>(result.proc);
-	assert(proc);
-	printf("demoProcCallback(proc=%p, thread=%lu, costSeconds=%f, result=%d, what=%s)\n", proc, result.thread, result.costSeconds, result.type, result.what.c_str());
 }
 
 int main()
@@ -81,6 +118,8 @@ int main()
 	printf(
 		"\n======================================================================\n"
 		"<any char> = shedule procs\n"
+		"'o' = auto schedule on\n"
+		"'o' = auto schedule off\n"
 		"'q' = exit\n"
 		"'s' = statistic\n"
 		"======================================================================\n\n"
@@ -104,6 +143,12 @@ int main()
 		{
 		case '\n':
 			break;
+		case 'o':
+			autoSchedule = true;
+			break;
+		case 'f':
+			autoSchedule = false;
+			break;
 		case 'q':
 		{
 			apm->Shutdown();
@@ -118,17 +163,22 @@ int main()
 		case 's':
 		{
 			printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-			printf("threads:%lu/%lu, doneQueue:%lu, waitQueue:%lu\n",
-				(unsigned long)apm->GetActiveThreadCount(), (unsigned long)apm->GetThreadCount(),
-				(unsigned long)apm->GetDoneQueueSize(), (unsigned long)apm->GetWaitQueueSize());
+			printf("threads: %lu/%lu, waitQueue:%lu\n", (unsigned long)apm->GetActiveThreadCount(), 
+				(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitQueueSize());
+
+			ResultQueueMap resultQueueMap;
+			apm->GetCallbackQueueMap(resultQueueMap);
+			for (ResultQueueMap::iterator it = resultQueueMap.begin(); it != resultQueueMap.end(); ++it)
+			{
+				printf("resultQueue[%lu].size = %lu\n", (unsigned long)it->first, (unsigned long)it->second.size());
+			}
 
 			StatisticProcInfoMap infoMap;
 			apm->GetStatisticInfos(infoMap);
-			for (StatisticProcInfoMap::iterator
-				it = infoMap.begin(); it != infoMap.end(); ++it)
+			for (StatisticProcInfoMap::iterator it = infoMap.begin(); it != infoMap.end(); ++it)
 			{
-				printf("%s: schedule=%lu, finish=%lu, exception=%lu, cost=%.2f (%.2f-%.2f)\n",
-					it->first.c_str(), (unsigned long)it->second.countScheduled,
+				printf("%s: proc=%lu/%lu (%luok, %luerror), cost=%.2f (%.2f-%.2f)\n",
+					it->first.c_str(), (unsigned long)it->second.countDone(), (unsigned long)it->second.countScheduled,
 					(unsigned long)it->second.countFinish, (unsigned long)it->second.countException,
 					it->second.costSecondsAverage(), it->second.costSecondsMin, it->second.costSecondsMax);
 			}
@@ -137,15 +187,9 @@ int main()
 		break;
 		default:
 		{
-			int count = rand() % PROC_COUNT_RAND + PROC_COUNT_BASE;
-			for (int i = 0; i < count; ++i) {
-				char name[16] = { 0 };
-				sprintf(name, "demo-%c", c);
-				float duration = rand() / (float)RAND_MAX * PROC_BLOCK_TIME_RAND + PROC_BLOCK_TIME_BASE;
-				DemoProc* proc = new DemoProc(name, duration, PROC_ERROR_RATIO);
-				apm->Schedule(proc);
-				proc->SetCallback(demoProcCallback);
-			}
+			char name[16] = { 0 };
+			sprintf(name, "demo-%c", c);
+			Schedule(name, false);
 		}
 		break;
 		}

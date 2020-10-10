@@ -17,17 +17,14 @@ public:
 	virtual void OnProcDone(const AsyncProcResult& result);
 
 public:
-	void GetStatisticInfos(StatisticProcInfoMap& outInfoMap) {
-		AutoMutex am(GetQueueMutex());
-		outInfoMap.clear();
-		outInfoMap.insert(m_infoMap.begin(), m_infoMap.end());
-	}
+	void GetStatisticInfos(StatisticProcInfoMap& outInfoMap);
 
 private:
 	StatisticProcInfo* ObtainInfo(const std::string& name);
 
 private:
 	StatisticProcInfoMap m_infoMap;
+	Mutex m_infoMapMutex;
 };
 
 #endif

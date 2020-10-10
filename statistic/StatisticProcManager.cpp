@@ -15,6 +15,8 @@ void StatisticProcManager::OnProcScheduled(AsyncProc* proc)
 
 void StatisticProcManager::OnProcDone(const AsyncProcResult& result)
 {
+	AutoMutex am(m_infoMapMutex);
+
 	StatisticProc* sProc = dynamic_cast<StatisticProc*>(result.proc);
 	assert(sProc);
 
@@ -42,6 +44,13 @@ void StatisticProcManager::OnProcDone(const AsyncProcResult& result)
 	}
 
 	spi->costSecondsTotal += result.costSeconds;
+}
+
+void StatisticProcManager::GetStatisticInfos(StatisticProcInfoMap& outInfoMap) 
+{
+	AutoMutex am(m_infoMapMutex);
+	outInfoMap.clear();
+	outInfoMap.insert(m_infoMap.begin(), m_infoMap.end());
 }
 
 StatisticProcInfo* StatisticProcManager::ObtainInfo(const std::string& name)

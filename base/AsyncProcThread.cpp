@@ -23,9 +23,13 @@ void* AsyncProcThread::ThreadFunc(void* arg)
 
 AsyncProcThread::AsyncProcThread(AsyncProcManager* manager)
 	: m_manager(manager)
+	, m_tid(0)
 	, m_state(State_None)
 	, m_proc(NULL)
 	, m_clock(0)
+#if defined(_WIN32) || defined(_WIN64)
+	, m_hThread(NULL)
+#endif
 {
 }
 
@@ -48,14 +52,14 @@ bool AsyncProcThread::Startup(void)
 	if(ret)
 		m_state = State_Running;
 		
-	printf("AsyncProcThread::Startup(thread=%lu)\n", m_tid);
+	//printf("AsyncProcThread::Startup(thread=%lu)\n", m_tid);
 
 	return ret;
 }
 
 void AsyncProcThread::ShutdownNotify(void)
 {
-	printf("AsyncProcThread::NotifyShutdown(m_tid=%lu\n", m_tid);
+	//printf("AsyncProcThread::NotifyShutdown(m_tid=%lu\n", m_tid);
 
 	assert(m_state != State_None);
 	m_state = State_Quiting;
@@ -73,7 +77,7 @@ void AsyncProcThread::ShutdownWait(void)
 
 	m_state = State_None;
 
-	printf("AsyncProcThread::Quit(m_tid=%lu)\n", m_tid);
+	//printf("AsyncProcThread::Quit(m_tid=%lu)\n", m_tid);
 }
 
 void AsyncProcThread::_Execute()
@@ -81,15 +85,15 @@ void AsyncProcThread::_Execute()
 	while(true)
 	{
 		{
-			AutoMutex am(m_manager->GetQueueMutex());
+			AutoMutex am(m_manager->GetWaitQueueMutex());
 			ProcQueue& waitQueue = m_manager->GetWaitQueue();
 			while (waitQueue.size() == 0 && State_Running == m_state)
 			{
-				printf("AsyncProcThread::Sleep(m_tid=%lu)\n", m_tid);
+				//printf("AsyncProcThread::Sleep(m_tid=%lu)\n", m_tid);
 				m_manager->DecActiveThreadCount();
 				m_manager->GetProcCondition().Sleep();					// Auto unlock queueMutex when sleeped
 				m_manager->IncActiveThreadCount();						// Auto lock queueMutex when awoken
-				printf("AsyncProcThread::Wake(m_tid=%lu)\n", m_tid);
+				//printf("AsyncProcThread::Wake(m_tid=%lu)\n", m_tid);
 			}
 
 			if (m_state != State_Running)
@@ -126,15 +130,27 @@ void AsyncProcThread::_Execute()
 
 void AsyncProcThread::_ProcDone(AsyncProcResult::Type type, const char* what)
 {
-	AutoMutex am(m_manager->GetQueueMutex());
 	AsyncProcResult result;
 	result.proc = m_proc;
 	result.costSeconds = (clock() - m_clock) / (float)CLOCKS_PER_SEC;
 	result.type = type;
-	result.thread = m_tid;
+	result.thread_id = m_tid;
 	if(what)
 		result.what = what;
 
-	m_manager->GetDoneQueue().push(result);
+	AutoMutex am(m_manager->GetCallbackQueueMutex());
+	if (m_proc->HasCallback())
+	{
+		ResultQueue* resultQueue = m_manager->GetCallbackQueue(m_proc->GetScheduleThreadId());
+		if (!resultQueue)
+			return;
+
+		resultQueue->push(result);
+	}
+	else
+	{
+		m_manager->OnProcDone(result);
+	}
+
 	m_proc = NULL;
 }

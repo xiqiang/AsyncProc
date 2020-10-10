@@ -42,17 +42,16 @@ private:
 	void _ProcDone(AsyncProcResult::Type type, const char* what);
 
 private:
-#if defined(_WIN32) || defined(_WIN64)
-	HANDLE m_hThread;
-	DWORD m_tid;
-#elif defined(__LINUX__)
-	pthread_t m_tid;
-#endif
-
 	AsyncProcManager* m_manager;
+	AP_Thread m_tid;
 	State m_state;
 	AsyncProc* m_proc;	
 	clock_t m_clock;
+
+#if defined(_WIN32) || defined(_WIN64)
+	HANDLE m_hThread;
+#endif
+
 };
 
 #endif

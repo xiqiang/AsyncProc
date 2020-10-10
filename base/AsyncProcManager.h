@@ -1,7 +1,7 @@
 #ifndef AsyncProcManager_H_Xiqiang_20190907
 #define AsyncProcManager_H_Xiqiang_20190907
 
-#include "AsyncProcDef.h"
+#include "AsyncProc.h"
 #include "AsyncProcThread.h"
 #include "Condition.h"
 #include "AutoMutex.h"
@@ -22,12 +22,26 @@ public:
 public:
 	void Startup(int threadCount = 1);
 	void Shutdown(void);
-
-	void Schedule(AsyncProc* proc);
 	void Tick(void);
+	void Schedule(AsyncProc* proc);
+
+	void Schedule(AsyncProc* proc, AsyncProcCallback fun) {
+		assert(proc);
+		proc->SetCallback(fun);
+		Schedule(proc);
+	}
+
+	template<typename T>
+	void Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result)) {
+		assert(proc);
+		proc->SetCallback(pVar, pMemberFun);
+		Schedule(proc);
+	}
+
+	void GetCallbackQueueMap(ResultQueueMap& outResultQueueMap);
 
 	size_t GetActiveThreadCount() {
-		AutoMutex am(m_queueMutex);
+		AutoMutex am(m_waitQueueMutex);
 		return m_activeThreadCount;
 	}
 
@@ -37,26 +51,24 @@ public:
 	}
 
 	size_t GetWaitQueueSize() {
-		AutoMutex am(m_queueMutex);
+		AutoMutex am(m_waitQueueMutex);
 		return m_waitQueue.size();
 	}
 
-	size_t GetDoneQueueSize() {
-		AutoMutex am(m_queueMutex);
-		return m_doneQueue.size();
-	}
+private:
+	void NotifyProcDone(const AsyncProcResult& result);
+	ResultQueue* GetCallbackQueue(AP_Thread thread_id);
 
-protected:
 	ProcQueue& GetWaitQueue(void) {
 		return m_waitQueue;					// lock outside
 	}
 
-	ResultQueue& GetDoneQueue(void) {
-		return m_doneQueue;					// lock outside
+	Mutex& GetWaitQueueMutex(void) {
+		return m_waitQueueMutex;
 	}
 
-	Mutex& GetQueueMutex(void) {
-		return m_queueMutex;
+	Mutex& GetCallbackQueueMutex(void) {
+		return m_callbackQueueMutex;
 	}
 
 	Condition& GetProcCondition(void) {
@@ -77,14 +89,16 @@ private:
 
 private:
 	ThreadVector m_threads;
-	Mutex m_queueMutex;
+	size_t m_activeThreadCount;
 	Mutex m_threadMutex;
-	Condition m_procCondition;
 
 	ProcQueue m_waitQueue;
-	ResultQueue m_doneQueue;
+	Mutex m_waitQueueMutex;
 
-	size_t m_activeThreadCount;
+	ResultQueueMap m_callbackQueueMap;
+	Mutex m_callbackQueueMutex;
+
+	Condition m_procCondition;
 };
 
 #endif

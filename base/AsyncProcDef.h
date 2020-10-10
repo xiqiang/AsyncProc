@@ -1,15 +1,26 @@
-#ifndef AsyncProcCallback_H_Xiqiang_20200901
-#define AsyncProcCallback_H_Xiqiang_20200901
+#ifndef AsyncProcDef_H_Xiqiang_20200901
+#define AsyncProcDef_H_Xiqiang_20200901
 
 #include <string>
 #include <vector>
 #include <queue>
+#include <map>
 
 #if defined(_WIN32) || defined(_WIN64)
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
+typedef DWORD AP_Thread;
+#define AP_GetThreadId	GetCurrentThreadId
+
 #elif defined(__LINUX__)
+
 #include <pthread.h>
+
+typedef pthread_t AP_Thread;
+#define AP_GetThreadId	pthread_self
+
 #endif
 
 class AsyncProc;
@@ -30,19 +41,14 @@ struct AsyncProcResult
 		: proc(NULL)
 		, costSeconds(0.0f)
 		, type(Type::FINISH)
-		, thread(-1)
+		, thread_id(-1)
 	{}
 
 	AsyncProc* proc;
 	float costSeconds;
 	Type type;
 	std::string what;
-
-#if defined(_WIN32) || defined(_WIN64)
-	DWORD thread;
-#elif defined(__LINUX__)
-	pthread_t thread;
-#endif
+	AP_Thread thread_id;
 
 };
 
@@ -81,8 +87,9 @@ private:
 	MemberFun	m_fun;
 };
 
-typedef std::vector<AsyncProcThread*>	ThreadVector;
-typedef std::queue<AsyncProc*>			ProcQueue;
-typedef std::queue<AsyncProcResult>		ResultQueue;
+typedef std::vector<AsyncProcThread*>		ThreadVector;
+typedef std::queue<AsyncProc*>				ProcQueue;
+typedef std::queue<AsyncProcResult>			ResultQueue;
+typedef std::map<AP_Thread, ResultQueue>	ResultQueueMap;
 
 #endif

@@ -6,9 +6,13 @@
 class AsyncProc
 {
 public:
+	friend class AsyncProcManager;
+
+public:
 	AsyncProc(void)
 	    : m_callback(NULL)
     	, m_caller(NULL) 
+		, m_scheduleThreadId(0)
 	{
 	}
 
@@ -24,8 +28,8 @@ public:
 	virtual void Execute(void) {}
 
 public:
-	template<class T>
-	void SetCallback( T* pVar, void(T::*pMemberFun)(const AsyncProcResult& result))
+	template<typename T>
+	void SetCallback(T* pVar, void(T::*pMemberFun)(const AsyncProcResult& result))
 	{
 		m_caller = new AsyncProcMemberCaller<T>(pVar, pMemberFun);
 	}
@@ -33,7 +37,11 @@ public:
 	void SetCallback(AsyncProcCallback fun)
 	{
 		m_callback = fun;
-	}	
+	}
+
+	bool HasCallback(void) const {
+		return m_caller || m_callback;
+	}
 
 	void InvokeCallback(const AsyncProcResult& result)
 	{
@@ -44,9 +52,19 @@ public:
 			m_caller->Invoke(result);
 	}
 
+	AP_Thread GetScheduleThreadId(void) const {
+		return m_scheduleThreadId;
+	}
+
+private:
+	void SetScheduleThreadId(AP_Thread thread_id) {
+		m_scheduleThreadId = thread_id;
+	}
+
 private:
 	AsyncProcCallback m_callback;
 	AsyncProcCaller* m_caller;
+	AP_Thread m_scheduleThreadId;
 };
 
 #endif
