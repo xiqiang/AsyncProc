@@ -1,7 +1,6 @@
 #ifndef AsyncProcDef_H_Xiqiang_20200901
 #define AsyncProcDef_H_Xiqiang_20200901
 
-#include <string>
 #include <vector>
 #include <deque>
 #include <map>
@@ -25,32 +24,7 @@ typedef pthread_t AP_Thread;
 
 class AsyncProc;
 class AsyncProcThread;
-
-// Result
-// -----------------
-
-struct AsyncProcResult
-{
-	enum Type
-	{
-		FINISH,
-		EXCEPTION,
-	};
-
-	AsyncProcResult()
-		: proc(NULL)
-		, costSeconds(0.0f)
-		, type(FINISH)
-		, thread_id(-1)
-	{}
-
-	AsyncProc* proc;
-	float costSeconds;
-	Type type;
-	std::string what;
-	AP_Thread thread_id;
-
-};
+struct AsyncProcResult;
 
 // Callback
 // -----------------
@@ -60,7 +34,7 @@ typedef void (*AsyncProcCallback)(const AsyncProcResult& result);
 class AsyncProcCaller
 {
 public:
-	virtual ~AsyncProcCaller() = 0;
+	virtual ~AsyncProcCaller() {};
 	virtual void Invoke(const AsyncProcResult& result) = 0;
 };
 

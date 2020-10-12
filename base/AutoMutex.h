@@ -1,7 +1,6 @@
 #ifndef AutoMutex_H_Xiqiang_20201007
 #define AutoMutex_H_Xiqiang_20201007
 
-#include <assert.h>
 #include "Mutex.h"
 
 class AutoMutex

@@ -1,6 +1,7 @@
 #ifndef AsyncProcManager_H_Xiqiang_20190907
 #define AsyncProcManager_H_Xiqiang_20190907
 
+#include <assert.h>
 #include "AsyncProc.h"
 #include "AsyncProcThread.h"
 #include "Condition.h"

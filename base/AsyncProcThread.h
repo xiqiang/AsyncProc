@@ -3,6 +3,7 @@
 
 #include <time.h>
 #include "AsyncProcDef.h"
+#include "AsyncProcResult.h"
 
 class AsyncProc;
 class AsyncProcManager;

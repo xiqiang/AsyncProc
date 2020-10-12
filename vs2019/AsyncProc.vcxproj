@@ -28,6 +28,7 @@
     <ClInclude Include="..\base\AsyncProc.h" />
     <ClInclude Include="..\base\AsyncProcDef.h" />
     <ClInclude Include="..\base\AsyncProcManager.h" />
+    <ClInclude Include="..\base\AsyncProcResult.h" />
     <ClInclude Include="..\base\AsyncProcThread.h" />
     <ClInclude Include="..\base\AutoMutex.h" />
     <ClInclude Include="..\base\Condition.h" />

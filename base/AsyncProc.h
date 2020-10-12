@@ -3,6 +3,8 @@
 
 #include "AsyncProcDef.h"
 
+struct AsyncProcResult;
+
 class AsyncProc
 {
 public:
