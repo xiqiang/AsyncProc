@@ -4,6 +4,7 @@
 #include <vector>
 #include <deque>
 #include <map>
+#include <string>
 
 #if defined(_WIN32) || defined(_WIN64)
 
@@ -66,5 +67,6 @@ typedef std::deque<AsyncProc*>				ProcDeque;
 typedef std::deque<AsyncProcResult>			ResultDeque;
 typedef std::vector<AsyncProcResult>		ResultVector;
 typedef std::map<AP_Thread, ResultDeque>	ResultDequeMap;
+typedef std::map<AP_Thread, std::string>	WorkingNameMap;
 
 #endif

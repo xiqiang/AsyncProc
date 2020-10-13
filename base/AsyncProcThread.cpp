@@ -83,6 +83,8 @@ void AsyncProcThread::ShutdownWait(void)
 
 void AsyncProcThread::_Execute()
 {
+	AP_Thread thread_id = AP_GetThreadId();
+
 	while(true)
 	{
 		{
@@ -91,9 +93,9 @@ void AsyncProcThread::_Execute()
 			while (waitDeque.empty() && State_Running == m_state)
 			{
 				//printf("AsyncProcThread::Sleep(m_tid=%lu)\n", m_tid);
-				m_manager->DecActiveThreadCount();
+				m_manager->DecActiveThread(thread_id);
 				m_manager->GetProcCondition().Sleep();					// Auto unlock dequeMutex when sleeped
-				m_manager->IncActiveThreadCount();						// Auto lock dequeMutex when awoken
+				m_manager->IncActiveThread(thread_id);						// Auto lock dequeMutex when awoken
 				//printf("AsyncProcThread::Wake(m_tid=%lu)\n", m_tid);
 			}
 
@@ -103,6 +105,7 @@ void AsyncProcThread::_Execute()
 			m_proc = waitDeque.front();
 			assert(m_proc);
 			waitDeque.pop_front();
+			m_manager->OnThreadPickWork(thread_id, m_proc);
 		}
 
 		try

@@ -31,7 +31,7 @@ void AsyncProcManager::Startup(int threadCount /*= 1*/)
 		{
 			m_threads.push_back(thread);
 			AutoMutex am_deque(m_waitDequeMutex);
-			IncActiveThreadCount();
+			IncActiveThread(thread->GetId());
 		}
 		else
 		{

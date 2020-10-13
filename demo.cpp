@@ -98,19 +98,24 @@ void Schedule(const char* name)
 void ShowStatistics()
 {
 	printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-	printf("threads: %lu/%lu, waitDeque:%lu\n", (unsigned long)apm->GetActiveThreadCount(),
+	printf("activeThread: %lu/%lu, waitQueue: %lu\n", (unsigned long)apm->GetActiveThreadCount(),
 		(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitDequeSize());
+
+	WorkingNameMap workingNameMap;
+	apm->GetWorkingNameMap(workingNameMap);
+	for (WorkingNameMap::iterator it = workingNameMap.begin(); it != workingNameMap.end(); ++it)
+		printf("workThread[%lu].proc: \"%s\"\n", (unsigned long)it->first, it->second.c_str());
 
 	ResultDequeMap resultDequeMap;
 	apm->GetCallbackDequeMap(resultDequeMap);
 	for (ResultDequeMap::iterator it = resultDequeMap.begin(); it != resultDequeMap.end(); ++it)
-		printf("resultDeque[%lu].size = %lu\n", (unsigned long)it->first, (unsigned long)it->second.size());
+		printf("tickThread[%lu].resultQueue: %lu\n", (unsigned long)it->first, (unsigned long)it->second.size());
 
 	StatisticProcInfoMap infoMap;
 	apm->GetStatisticInfos(infoMap);
 	for (StatisticProcInfoMap::iterator it = infoMap.begin(); it != infoMap.end(); ++it)
 	{
-		printf("%s: proc=%lu/%lu (%luok, %luerr), cost=%.2f (%.2f-%.2f)\n",
+		printf("\"%s\": count=%lu/%lu (%luok, %luerr), cost=%.2f (%.2f-%.2f)\n",
 			it->first.c_str(), (unsigned long)it->second.countDone(), (unsigned long)it->second.countScheduled,
 			(unsigned long)it->second.countFinish, (unsigned long)it->second.countException,
 			it->second.costSecondsAverage(), it->second.costSecondsMin, it->second.costSecondsMax);
@@ -164,7 +169,7 @@ int main()
 	{
 		char* name = new char[32];
 		name[0] = '\0';
-		sprintf(name, "cycle-%d", i);
+		sprintf(name, "auto-%d", i);
 
 #if defined(_WIN32) || defined(_WIN64)
 		cycleHandle[i] = CreateThread(NULL, 0, CycleThreadProc, (PVOID)name, 0, &cycleThreadId[i]);
@@ -198,7 +203,7 @@ int main()
 		default:
 		{
 			char name[16] = { 0 };
-			sprintf(name, "demo-%c", c);
+			sprintf(name, "manual-%c", c);
 			Schedule(name);
 		}
 		break;

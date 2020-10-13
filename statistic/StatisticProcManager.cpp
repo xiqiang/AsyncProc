@@ -46,11 +46,30 @@ void StatisticProcManager::OnProcDone(const AsyncProcResult& result)
 	spi->costSecondsTotal += result.costSeconds;
 }
 
-void StatisticProcManager::GetStatisticInfos(StatisticProcInfoMap& outInfoMap) 
+void StatisticProcManager::OnThreadPickWork(AP_Thread thread_id, AsyncProc* proc)
+{
+	StatisticProc* sProc = dynamic_cast<StatisticProc*>(proc);
+	assert(sProc);
+	m_workingProcMap[thread_id] = sProc->GetName();
+}
+
+void StatisticProcManager::OnThreadSleep(AP_Thread thread_id)
+{
+	m_workingProcMap.erase(thread_id);
+}
+
+void StatisticProcManager::GetStatisticInfos(StatisticProcInfoMap& outInfoMap)
 {
 	AutoMutex am(m_infoMapMutex);
 	outInfoMap.clear();
 	outInfoMap.insert(m_infoMap.begin(), m_infoMap.end());
+}
+
+void StatisticProcManager::GetWorkingNameMap(WorkingNameMap& outInfoMap)
+{
+	AutoMutex am(GetWaitDequeMutex());
+	outInfoMap.clear();
+	outInfoMap.insert(m_workingProcMap.begin(), m_workingProcMap.end());
 }
 
 StatisticProcInfo* StatisticProcManager::ObtainInfo(const std::string& name)

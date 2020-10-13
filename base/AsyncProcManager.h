@@ -19,6 +19,8 @@ public:
 public:
 	virtual void OnProcScheduled(AsyncProc* proc) {}
 	virtual void OnProcDone(const AsyncProcResult& result) {}
+	virtual void OnThreadPickWork(AP_Thread thread_id, AsyncProc* proc) {}
+	virtual void OnThreadSleep(AP_Thread thread_id) {}
 
 public:
 	void Startup(int threadCount = 1);
@@ -56,7 +58,7 @@ public:
 		return m_waitDeque.size();
 	}
 
-private:
+protected:
 	void NotifyProcDone(const AsyncProcResult& result);
 	ResultDeque* GetCallbackDeque(AP_Thread thread_id);
 
@@ -76,12 +78,13 @@ private:
 		return m_procCondition;
 	}
 
-	void IncActiveThreadCount() {
-		++m_activeThreadCount;				// lock outside
+	void IncActiveThread(AP_Thread thread_id) {
+		++m_activeThreadCount;						// lock waitDeque outside
 	}
 
-	void DecActiveThreadCount() {
-		--m_activeThreadCount;				// lock outside
+	void DecActiveThread(AP_Thread thread_id) {
+		--m_activeThreadCount;						// lock waitDeque outside
+		OnThreadSleep(thread_id);
 	}
 
 private:

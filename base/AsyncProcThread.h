@@ -27,6 +27,10 @@ private:
 public:
 	~AsyncProcThread();
 
+	AP_Thread GetId(void) const {
+		return m_tid;
+	}
+
 private:
 	bool Startup(void);
 	void ShutdownNotify(void);
