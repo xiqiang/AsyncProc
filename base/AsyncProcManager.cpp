@@ -1,5 +1,6 @@
 #include "AsyncProcManager.h"
 #include <cstdio>
+#include <algorithm>
 
 
 AsyncProcManager::AsyncProcManager()
@@ -40,11 +41,11 @@ void AsyncProcManager::Startup(int threadCount /*= 1*/)
 	}
 }
 
-void AsyncProcManager::Shutdown(void)
+void AsyncProcManager::Shutdown(AsyncProcShutdownMode mode /*= AsyncProcShutdown_Normal*/)
 {
-	//printf("AsyncProcManager::Shutdown()\n");
+	//printf("AsyncProcManager::Shutdown(mode=%d)\n", mode);
 
-	_ShutdownThreads();
+	_ShutdownThreads(mode);
 	_ClearProcs();
 }
 
@@ -66,13 +67,24 @@ void AsyncProcManager::Tick()
 		NotifyProcDone(*it);
 }
 
-void AsyncProcManager::Schedule(AsyncProc* proc)
+struct AsyncProcGreater
+{
+	bool operator()(AsyncProc* l, AsyncProc* r) {
+		return l->GetPriority() > r->GetPriority();
+	}
+};
+
+void AsyncProcManager::Schedule(AsyncProc* proc, int priority /*= 0*/)
 {
 	assert(proc);
 	proc->SetScheduleThreadId(AP_GetThreadId());
 
 	AutoMutex am(m_waitDequeMutex);
 	m_waitDeque.push_back(proc);
+
+	proc->SetPriority(priority);
+	std::sort(m_waitDeque.begin(), m_waitDeque.end(), AsyncProcGreater());
+
 	m_procCondition.Wake();
 	OnProcScheduled(proc);
 }
@@ -106,29 +118,42 @@ ResultDeque* AsyncProcManager::GetCallbackDeque(AP_Thread thread_id)
 		return &(ret.first->second);
 }
 
-void AsyncProcManager::_ShutdownThreads(void)
+void AsyncProcManager::_ShutdownThreads(AsyncProcShutdownMode mode)
 {
-	//printf("AsyncProcManager::_ShutdownThreads()\n");
+	//printf("AsyncProcManager::_ShutdownThreads(mode=%d)\n", mode);
 
-	AutoMutex am(m_threadMutex);
-	if (m_threads.empty())
-		return;
-
-	for (ThreadVector::iterator it = m_threads.begin();
-		it != m_threads.end(); ++it)
+	ThreadVector waitingThread;
 	{
-		(*it)->ShutdownNotify();
+		AutoMutex am(m_threadMutex);
+		if (m_threads.empty())
+			return;
+
+		for (ThreadVector::iterator it = m_threads.begin();
+			it != m_threads.end(); ++it)
+		{
+			(*it)->ShutdownNotify(mode);
+		}
+
+		waitingThread = m_threads;
 	}
 
 	m_procCondition.WakeAll();
 
-	for (ThreadVector::iterator it = m_threads.begin();
-		it != m_threads.end(); ++it)
+	for (ThreadVector::iterator it = waitingThread.begin();
+		it != waitingThread.end(); ++it)
 	{
 		(*it)->ShutdownWait();
-		delete *it;
 	}
-	m_threads.clear();
+
+	{
+		AutoMutex am(m_threadMutex);
+		for (ThreadVector::iterator it = m_threads.begin();
+			it != m_threads.end(); ++it)
+		{
+			delete* it;
+		}
+		m_threads.clear();
+	}
 }
 
 void AsyncProcManager::_ClearProcs(void)

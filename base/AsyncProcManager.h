@@ -24,21 +24,21 @@ public:
 
 public:
 	void Startup(int threadCount = 1);
-	void Shutdown(void);
+	void Shutdown(AsyncProcShutdownMode mode = AsyncProcShutdown_Normal);
 	void Tick(void);
-	void Schedule(AsyncProc* proc);
+	void Schedule(AsyncProc* proc, int priority = 0);
 
-	void Schedule(AsyncProc* proc, AsyncProcCallback fun) {
+	void Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority = 0) {
 		assert(proc);
 		proc->SetCallback(fun);
-		Schedule(proc);
+		Schedule(proc, priority);
 	}
 
 	template<typename T>
-	void Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result)) {
+	void Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result), int priority = 0) {
 		assert(proc);
 		proc->SetCallback(pVar, pMemberFun);
-		Schedule(proc);
+		Schedule(proc, priority);
 	}
 
 	void GetCallbackDequeMap(ResultDequeMap& outResultDequeMap);
@@ -88,7 +88,7 @@ protected:
 	}
 
 private:
-	void _ShutdownThreads(void);
+	void _ShutdownThreads(AsyncProcShutdownMode mode);
 	void _ClearProcs(void);
 
 private:

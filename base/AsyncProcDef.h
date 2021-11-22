@@ -48,18 +48,22 @@ class AsyncProcMemberCaller
 public:
 	AsyncProcMemberCaller(T* p, MemberFun fun)
 		: m_ptr(p)
-		, m_fun(fun) 
-	{
+		, m_fun(fun) {
 	}
 
-	virtual void Invoke(const AsyncProcResult& result)
-	{
+	virtual void Invoke(const AsyncProcResult& result) {
 		(m_ptr->*m_fun)(result);
 	}
 
 private:
 	T*			m_ptr;
 	MemberFun	m_fun;
+};
+
+enum AsyncProcShutdownMode
+{
+	AsyncProcShutdown_Normal,
+	AsyncProcShutdown_Fast,
 };
 
 typedef std::vector<AsyncProcThread*>		ThreadVector;

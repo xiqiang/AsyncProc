@@ -18,7 +18,8 @@ public:
 	{
 		State_None,
 		State_Running,
-		State_Quiting
+		State_Quiting,
+		State_FastQuiting,
 	};
 
 private:
@@ -33,7 +34,7 @@ public:
 
 private:
 	bool Startup(void);
-	void ShutdownNotify(void);
+	void ShutdownNotify(AsyncProcShutdownMode mode);
 	void ShutdownWait(void);
 
 private:

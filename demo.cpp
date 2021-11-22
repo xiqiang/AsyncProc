@@ -16,7 +16,7 @@
 #include "statistic/StatisticProcManager.h"
 
 const int	WORK_THREAD_COUNT = 500;
-const int	TICK_THREAD_COUNT = 100;
+const int	TICK_THREAD_COUNT = 500;
 
 const float AUTO_SCHEDULE_SECONDS_MIN = 0.0f;
 const float AUTO_SCHEDULE_SECONDS_MAX = 1.0f;
@@ -27,6 +27,8 @@ const int	NEW_PROC_COUNT_MAX = 10;
 const float	PROC_SLEEP_SECONDS_MIN = 0.0f;
 const float	PROC_SLEEP_SECONDS_MAX = 1.0f;
 const float PROC_ERROR_RATIO = 0.5f;
+
+const float ECHO_INFO_MILLISECONDS = 1000;
 
 class DemoProc : public StatisticProc {
 public:
@@ -56,13 +58,19 @@ private:
 #if defined(_WIN32) || defined(_WIN64)
 DWORD cycleThreadId[TICK_THREAD_COUNT];
 HANDLE cycleHandle[TICK_THREAD_COUNT];
+DWORD infoThreadId;
+HANDLE infoHandle;
 #elif defined(__LINUX__)
 pthread_t cycleThreadId[TICK_THREAD_COUNT];
+pthread_t infoThreadId;
 #endif
 
 StatisticProcManager* apm = NULL;
-bool alive = false;
+bool aliveTick = false;
+bool aliveInfo = false;
 bool autoSchedule = true;
+bool fastQuit = false;
+clock_t infoClock;
 
 int RangeRand(int min, int max)
 {
@@ -89,9 +97,9 @@ void Schedule(const char* name)
 		DemoProc* proc = new DemoProc(name, duration, PROC_ERROR_RATIO);
 
 		if (rand() % 2 == 0)
-			apm->Schedule(proc, demoProcCallback);
+			apm->Schedule(proc, demoProcCallback, rand() % 1000);
 		else
-			apm->Schedule(proc);
+			apm->Schedule(proc, rand() % 1000);
 	}
 }
 
@@ -132,7 +140,7 @@ void* CycleThreadProc(void* arg)
 	char* name = (char*)arg;
 	clock_t nextClock = clock();
 
-	while (alive)
+	while (aliveTick)
 	{
 		clock_t curClock = clock();
 		if (autoSchedule && nextClock <= curClock)
@@ -147,6 +155,26 @@ void* CycleThreadProc(void* arg)
 	return 0;
 }
 
+#if defined(_WIN32) || defined(_WIN64)
+DWORD WINAPI InfoThreadProc(PVOID arg)
+#elif defined(__LINUX__)
+void* InfoThreadProc(void* arg)
+#endif	
+{
+	while (aliveInfo)
+	{
+#if defined(_WIN32) || defined(_WIN64)
+		Sleep((DWORD)(ECHO_INFO_MILLISECONDS));
+#elif defined(__LINUX__)
+		usleep((useconds_t)(ECHO_INFO_MILLISECONDS * 1000));
+#endif
+		printf("activeThread: %lu/%lu, waitQueue: %lu\n", (unsigned long)apm->GetActiveThreadCount(),
+			(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitDequeSize());
+	}
+
+	return 0;
+}
+
 int main()
 {
 	printf(
@@ -155,7 +183,8 @@ int main()
 		"'t' = manual tick\n"
 		"'o' = auto schedule on\n"
 		"'f' = auto schedule off\n"
-		"'q' = exit\n"
+		"'q' = fast quit\n"
+		"'e' = normal quit\n"
 		"'s' = statistic\n"
 		"======================================================================\n\n"
 	);
@@ -163,7 +192,9 @@ int main()
 	srand(clock());
 	apm = new StatisticProcManager();
 	apm->Startup(WORK_THREAD_COUNT);
-	alive = true;
+	aliveTick = true;
+	aliveInfo = true;
+	infoClock = clock();
 
 	for (int i = 0; i < TICK_THREAD_COUNT; ++i)
 	{
@@ -178,7 +209,13 @@ int main()
 #endif
 	}
 
-	while (alive)
+#if defined(_WIN32) || defined(_WIN64)
+	infoHandle = CreateThread(NULL, 0, InfoThreadProc, (PVOID)0, 0, &infoThreadId);
+#elif defined(__LINUX__)
+	pthread_create(&infoThreadId, NULL, InfoThreadProc, (void*)0);
+#endif
+
+	while (aliveTick)
 	{
 		char c = getchar();
 		switch (c)
@@ -194,8 +231,15 @@ int main()
 		case 'f':
 			autoSchedule = false;
 			break;
+		case 'e':
+			aliveTick = false;
+			fastQuit = false;
+			printf("exiting(normal)...\n");
+			break;
 		case 'q':
-			alive = false;
+			aliveTick = false;
+			fastQuit = true;
+			printf("exiting(fast)...\n");
 			break;
 		case 's':
 			ShowStatistics();
@@ -218,9 +262,20 @@ int main()
 #elif defined(__LINUX__)
 		pthread_join(cycleThreadId[i], NULL);
 #endif			
+
+		//printf("waiting thread... %d\n", i);
 	}
 
-	apm->Shutdown();
+	apm->Shutdown(fastQuit ? AsyncProcShutdown_Fast : AsyncProcShutdown_Normal);
+
+	aliveInfo = false;
+#if defined(_WIN32) || defined(_WIN64)
+	WaitForSingleObject(infoHandle, INFINITE);
+	CloseHandle(infoHandle);
+#elif defined(__LINUX__)
+	pthread_join(infoThreadId, NULL);
+#endif	
+
 	delete apm;
 
 #if defined(_WIN32) || defined(_WIN64)		

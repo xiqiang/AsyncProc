@@ -11,17 +11,15 @@ public:
 	friend class AsyncProcManager;
 
 public:
-	AsyncProc(void)
+	AsyncProc()
 	    : m_callback(NULL)
     	, m_caller(NULL) 
 		, m_scheduleThreadId(0)
-	{
+		, m_priority(0) {
 	}
 
-	virtual ~AsyncProc(void) 
-	{
-		if(m_caller) 
-		{
+	virtual ~AsyncProc(void) {
+		if(m_caller) {
 			delete m_caller;
 			m_caller = NULL;
 		}		
@@ -31,13 +29,11 @@ public:
 
 public:
 	template<typename T>
-	void SetCallback(T* pVar, void(T::*pMemberFun)(const AsyncProcResult& result))
-	{
+	void SetCallback(T* pVar, void(T::*pMemberFun)(const AsyncProcResult& result)) {
 		m_caller = new AsyncProcMemberCaller<T>(pVar, pMemberFun);
 	}
 
-	void SetCallback(AsyncProcCallback fun)
-	{
+	void SetCallback(AsyncProcCallback fun) {
 		m_callback = fun;
 	}
 
@@ -45,8 +41,7 @@ public:
 		return m_caller || m_callback;
 	}
 
-	void InvokeCallback(const AsyncProcResult& result)
-	{
+	void InvokeCallback(const AsyncProcResult& result) {
 		if(m_callback)
 			m_callback(result);
 
@@ -58,15 +53,24 @@ public:
 		return m_scheduleThreadId;
 	}
 
+	int GetPriority() {
+		return m_priority;
+	}
+
 private:
 	void SetScheduleThreadId(AP_Thread thread_id) {
 		m_scheduleThreadId = thread_id;
+	}
+
+	void SetPriority(int value) {
+		m_priority = value;
 	}
 
 private:
 	AsyncProcCallback m_callback;
 	AsyncProcCaller* m_caller;
 	AP_Thread m_scheduleThreadId;
+	int m_priority;
 };
 
 #endif

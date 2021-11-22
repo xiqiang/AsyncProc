@@ -57,12 +57,12 @@ bool AsyncProcThread::Startup(void)
 	return ret;
 }
 
-void AsyncProcThread::ShutdownNotify(void)
+void AsyncProcThread::ShutdownNotify(AsyncProcShutdownMode mode)
 {
 	//printf("AsyncProcThread::NotifyShutdown(m_tid=%lu\n", m_tid);
 
 	assert(m_state != State_None);
-	m_state = State_Quiting;
+	m_state = AsyncProcShutdown_Fast == mode ? State_FastQuiting : State_Quiting;
 }
 
 void AsyncProcThread::ShutdownWait(void)
@@ -90,17 +90,34 @@ void AsyncProcThread::_Execute()
 		{
 			AutoMutex am(m_manager->GetWaitDequeMutex());
 			ProcDeque& waitDeque = m_manager->GetWaitDeque();
-			while (waitDeque.empty() && State_Running == m_state)
-			{
-				//printf("AsyncProcThread::Sleep(m_tid=%lu)\n", m_tid);
-				m_manager->DecActiveThread(thread_id);
-				m_manager->GetProcCondition().Sleep();					// Auto unlock dequeMutex when sleeped
-				m_manager->IncActiveThread(thread_id);						// Auto lock dequeMutex when awoken
-				//printf("AsyncProcThread::Wake(m_tid=%lu)\n", m_tid);
-			}
 
-			if (m_state != State_Running)
+			switch (m_state)
+			{
+			case State_FastQuiting:
 				return;
+
+			case State_Quiting:
+				if (waitDeque.empty())
+					return;
+				break;
+
+			case State_Running:
+				while (waitDeque.empty() && State_Running == m_state)
+				{
+					//printf("AsyncProcThread::Sleep(m_tid=%lu)\n", m_tid);
+					m_manager->DecActiveThread(thread_id);
+					m_manager->GetProcCondition().Sleep();						// Auto unlock dequeMutex when sleeped
+					m_manager->IncActiveThread(thread_id);						// Auto lock dequeMutex when awoken
+					//printf("AsyncProcThread::Wake(m_tid=%lu)\n", m_tid);
+				}
+
+				if (m_state != State_Running)
+					continue;
+				break;
+
+			default:
+				continue;
+			}
 
 			m_proc = waitDeque.front();
 			assert(m_proc);
@@ -121,7 +138,7 @@ void AsyncProcThread::_Execute()
 #if defined(__LINUX__)
 		catch (abi::__forced_unwind&)
 		{
-			printf("AsyncProcThread::__forced_unwind(m_tid=%lu)\n", m_tid);
+			//printf("AsyncProcThread::__forced_unwind(m_tid=%lu)\n", m_tid);
 			throw;
 		}
 #endif
