@@ -160,16 +160,9 @@ void AsyncProcThread::_ProcDone(AsyncProcResult::Type type, const char* what)
 		result.what = what;
 
 	if (m_proc->HasCallback())
-	{
-		AutoMutex am(m_manager->GetCallbackDequeMutex());
-		ResultDeque* resultDeque = m_manager->GetCallbackDeque(m_proc->GetScheduleThreadId());
-		if (resultDeque)
-			resultDeque->push_back(result);
-	}
+		m_manager->EnqueueCallback(result);
 	else
-	{
 		m_manager->NotifyProcDone(result);
-	}
 
 	m_proc = NULL;
 }

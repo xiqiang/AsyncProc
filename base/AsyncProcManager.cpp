@@ -7,6 +7,7 @@ AsyncProcManager::AsyncProcManager()
 	: m_activeThreadCount(0)
 	, m_waitDequeMutex()
 	, m_procCondition(&m_waitDequeMutex)
+	, m_callbackSize(0)
 {
 }
 
@@ -51,6 +52,9 @@ void AsyncProcManager::Shutdown(AsyncProcShutdownMode mode /*= AsyncProcShutdown
 
 void AsyncProcManager::Tick()
 {
+	if (0 == m_callbackSize)
+		return;
+
 	m_callbackDequeMutex.Lock();
 	ResultDeque* resultDeque = GetCallbackDeque(AP_GetThreadId());
 	if (!resultDeque || resultDeque->empty())
@@ -60,6 +64,7 @@ void AsyncProcManager::Tick()
 	}
 
 	ResultVector results(resultDeque->begin(), resultDeque->end());
+	m_callbackSize -= resultDeque->size();
 	resultDeque->clear();
 	m_callbackDequeMutex.Unlock();
 
@@ -74,7 +79,7 @@ struct AsyncProcGreater
 	}
 };
 
-void AsyncProcManager::Schedule(AsyncProc* proc, int priority /*= 0*/)
+void AsyncProcManager::Schedule(AsyncProc* proc, int priority /*= 0*/, bool sortNow /*= true*/)
 {
 	assert(proc);
 	proc->SetScheduleThreadId(AP_GetThreadId());
@@ -83,10 +88,32 @@ void AsyncProcManager::Schedule(AsyncProc* proc, int priority /*= 0*/)
 	m_waitDeque.push_back(proc);
 
 	proc->SetPriority(priority);
-	std::sort(m_waitDeque.begin(), m_waitDeque.end(), AsyncProcGreater());
+	if(sortNow)
+		std::sort(m_waitDeque.begin(), m_waitDeque.end(), AsyncProcGreater());
 
 	m_procCondition.Wake();
 	OnProcScheduled(proc);
+}
+
+void AsyncProcManager::Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority /*= 0*/, bool sortNow /*= true*/)
+{
+	assert(proc);
+	proc->SetCallback(fun);
+	Schedule(proc, priority, sortNow);
+}
+
+template<typename T>
+void AsyncProcManager::Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result), int priority /*= 0*/, bool sortNow /*= true*/)
+{
+	assert(proc);
+	proc->SetCallback(pVar, pMemberFun);
+	Schedule(proc, priority, sortNow);
+}
+
+void AsyncProcManager::Sort()
+{
+	AutoMutex am(m_waitDequeMutex);
+	std::sort(m_waitDeque.begin(), m_waitDeque.end(), AsyncProcGreater());
 }
 
 void AsyncProcManager::GetCallbackDequeMap(ResultDequeMap& outResultDequeMap) 
@@ -94,6 +121,17 @@ void AsyncProcManager::GetCallbackDequeMap(ResultDequeMap& outResultDequeMap)
 	AutoMutex am(m_callbackDequeMutex);
 	outResultDequeMap.clear();
 	outResultDequeMap.insert(m_callbackDequeMap.begin(), m_callbackDequeMap.end());
+}
+
+void AsyncProcManager::EnqueueCallback(const AsyncProcResult& result)
+{
+	AutoMutex am(m_callbackDequeMutex);
+	ResultDeque* resultDeque = GetCallbackDeque(result.proc->GetScheduleThreadId());
+	if (resultDeque)
+	{
+		resultDeque->push_back(result);
+		++m_callbackSize;
+	}
 }
 
 void AsyncProcManager::NotifyProcDone(const AsyncProcResult& result)
@@ -153,6 +191,7 @@ void AsyncProcManager::_ShutdownThreads(AsyncProcShutdownMode mode)
 			delete* it;
 		}
 		m_threads.clear();
+		m_activeThreadCount = 0;
 	}
 }
 

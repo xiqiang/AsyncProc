@@ -26,22 +26,19 @@ public:
 	void Startup(int threadCount = 1);
 	void Shutdown(AsyncProcShutdownMode mode = AsyncProcShutdown_Normal);
 	void Tick(void);
-	void Schedule(AsyncProc* proc, int priority = 0);
 
-	void Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority = 0) {
-		assert(proc);
-		proc->SetCallback(fun);
-		Schedule(proc, priority);
-	}
+	void Schedule(AsyncProc* proc, int priority = 0, bool sortNow = true);
+	void Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority = 0, bool sortNow = true);
 
 	template<typename T>
-	void Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result), int priority = 0) {
-		assert(proc);
-		proc->SetCallback(pVar, pMemberFun);
-		Schedule(proc, priority);
-	}
+	void Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result), int priority = 0, bool sortNow = true);
+
+	void Sort();
 
 	void GetCallbackDequeMap(ResultDequeMap& outResultDequeMap);
+	size_t GetCallbackSize() {
+		return m_callbackSize;
+	}
 
 	size_t GetActiveThreadCount() {
 		AutoMutex am(m_waitDequeMutex);
@@ -59,6 +56,7 @@ public:
 	}
 
 protected:
+	void EnqueueCallback(const AsyncProcResult& result);
 	void NotifyProcDone(const AsyncProcResult& result);
 	ResultDeque* GetCallbackDeque(AP_Thread thread_id);
 
@@ -102,6 +100,7 @@ private:
 
 	ResultDequeMap m_callbackDequeMap;
 	Mutex m_callbackDequeMutex;
+	size_t m_callbackSize;
 };
 
 #endif

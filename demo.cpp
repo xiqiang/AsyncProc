@@ -15,20 +15,23 @@
 #include "statistic/StatisticProc.h"
 #include "statistic/StatisticProcManager.h"
 
-const int	WORK_THREAD_COUNT = 500;
-const int	TICK_THREAD_COUNT = 500;
+const int	WORK_THREAD_COUNT = 2000;
+const int	TICK_THREAD_COUNT = 1000;
 
+const int	AUTO_SCHEDULE_SLEEP_MILLISECONDS = 1;
 const float AUTO_SCHEDULE_SECONDS_MIN = 0.0f;
 const float AUTO_SCHEDULE_SECONDS_MAX = 1.0f;
 
 const int	NEW_PROC_COUNT_MIN = 0;
-const int	NEW_PROC_COUNT_MAX = 10;
+const int	NEW_PROC_COUNT_MAX = 5;
 
 const float	PROC_SLEEP_SECONDS_MIN = 0.0f;
 const float	PROC_SLEEP_SECONDS_MAX = 1.0f;
+const float PROC_HAS_CALLBACK_RATIO = 0.5f;
 const float PROC_ERROR_RATIO = 0.5f;
+const float PROC_SORT_RATIO = 0.5f;
 
-const float ECHO_INFO_MILLISECONDS = 1000;
+const int	ECHO_SLEEP_MILLISECONDS = 1000;
 
 class DemoProc : public StatisticProc {
 public:
@@ -46,7 +49,7 @@ public:
 #elif defined(__LINUX__)
 		usleep((useconds_t)(m_duration * 1000 * 1000));
 #endif
-		if (rand() / (float)RAND_MAX <= m_errRatio)
+		if (rand() / (float)RAND_MAX < m_errRatio)
 			throw "error";
 	}
 
@@ -95,11 +98,12 @@ void Schedule(const char* name)
 	for (int i = 0; i < count; ++i) {
 		float duration = RangeRand(PROC_SLEEP_SECONDS_MIN, PROC_SLEEP_SECONDS_MAX);
 		DemoProc* proc = new DemoProc(name, duration, PROC_ERROR_RATIO);
+		bool sortNow = rand() / (float)RAND_MAX < PROC_SORT_RATIO;
 
-		if (rand() % 2 == 0)
-			apm->Schedule(proc, demoProcCallback, rand() % 1000);
+		if (rand() / (float)RAND_MAX < PROC_HAS_CALLBACK_RATIO)
+			apm->Schedule(proc, demoProcCallback, rand() % 1000, sortNow);
 		else
-			apm->Schedule(proc, rand() % 1000);
+			apm->Schedule(proc, rand() % 1000, sortNow);
 	}
 }
 
@@ -142,6 +146,11 @@ void* CycleThreadProc(void* arg)
 
 	while (aliveTick)
 	{
+#if defined(_WIN32) || defined(_WIN64)
+		Sleep(AUTO_SCHEDULE_SLEEP_MILLISECONDS);
+#elif defined(__LINUX__)
+		usleep(AUTO_SCHEDULE_SLEEP_MILLISECONDS * 1000);
+#endif
 		clock_t curClock = clock();
 		if (autoSchedule && nextClock <= curClock)
 		{
@@ -164,12 +173,12 @@ void* InfoThreadProc(void* arg)
 	while (aliveInfo)
 	{
 #if defined(_WIN32) || defined(_WIN64)
-		Sleep((DWORD)(ECHO_INFO_MILLISECONDS));
+		Sleep(ECHO_SLEEP_MILLISECONDS);
 #elif defined(__LINUX__)
-		usleep((useconds_t)(ECHO_INFO_MILLISECONDS * 1000));
+		usleep(ECHO_SLEEP_MILLISECONDS * 1000);
 #endif
-		printf("activeThread: %lu/%lu, waitQueue: %lu\n", (unsigned long)apm->GetActiveThreadCount(),
-			(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitDequeSize());
+		printf("activeThread: %lu/%lu, waitQueue: %lu, callbackSize: %lu\n", (unsigned long)apm->GetActiveThreadCount(),
+			(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitDequeSize(), (unsigned long)apm->GetCallbackSize());
 	}
 
 	return 0;
