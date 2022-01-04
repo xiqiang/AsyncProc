@@ -102,14 +102,6 @@ void AsyncProcManager::Schedule(AsyncProc* proc, AsyncProcCallback fun, int prio
 	Schedule(proc, priority, sortNow);
 }
 
-template<typename T>
-void AsyncProcManager::Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result), int priority /*= 0*/, bool sortNow /*= true*/)
-{
-	assert(proc);
-	proc->SetCallback(pVar, pMemberFun);
-	Schedule(proc, priority, sortNow);
-}
-
 void AsyncProcManager::Sort()
 {
 	AutoMutex am(m_waitDequeMutex);
