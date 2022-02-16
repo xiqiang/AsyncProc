@@ -7,6 +7,7 @@ AsyncProcManager::AsyncProcManager()
 	: m_activeThreadCount(0)
 	, m_waitDequeMutex()
 	, m_procCondition(&m_waitDequeMutex)
+	, m_maxWaitSize(0)
 	, m_callbackSize(0)
 {
 }
@@ -16,11 +17,13 @@ AsyncProcManager::~AsyncProcManager()
 	Shutdown();
 }
 
-void AsyncProcManager::Startup(int threadCount /*= 1*/)
+void AsyncProcManager::Startup(int threadCount /*= 1*/, size_t maxWaitSize /*= 65535*/)
 {
 	//printf("AsyncProcManager::Startup(threadCount=%d)\n", threadCount);
 
 	assert(threadCount > 0);
+	assert(maxWaitSize > 0);
+	m_maxWaitSize = maxWaitSize;
 
 	AutoMutex am_thread(m_threadMutex);
 	for (int t = 0; t < threadCount; ++t)
@@ -83,16 +86,28 @@ void AsyncProcManager::Schedule(AsyncProc* proc, int priority /*= 0*/, bool sort
 {
 	assert(proc);
 	proc->SetScheduleThreadId(AP_GetThreadId());
-
-	AutoMutex am(m_waitDequeMutex);
-	m_waitDeque.push_back(proc);
-
 	proc->SetPriority(priority);
-	if(sortNow)
-		std::sort(m_waitDeque.begin(), m_waitDeque.end(), AsyncProcGreater());
+
+	{
+		AutoMutex am(m_waitDequeMutex);
+		if (m_waitDeque.size() >= m_maxWaitSize)
+		{
+			OnProcOverflowed(proc);
+			delete proc;
+			return;
+		}
+	}
+
+	OnProcScheduled(proc);
+
+	{
+		AutoMutex am(m_waitDequeMutex);
+		m_waitDeque.push_back(proc);
+		if (sortNow)
+			std::sort(m_waitDeque.begin(), m_waitDeque.end(), AsyncProcGreater());
+	}
 
 	m_procCondition.Wake();
-	OnProcScheduled(proc);
 }
 
 void AsyncProcManager::Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority /*= 0*/, bool sortNow /*= true*/)

@@ -7,6 +7,7 @@ struct StatisticProcInfo
 {
 	StatisticProcInfo() 
 		: countScheduled(0)
+		, countOverflowed(0)
 		, countFinish(0)
 		, countException(0)
 		, costSecondsMax(0.0f)
@@ -23,6 +24,7 @@ struct StatisticProcInfo
 	}
 
 	size_t countScheduled;
+	size_t countOverflowed;
 	size_t countFinish;
 	size_t countException;
 	float costSecondsMax;

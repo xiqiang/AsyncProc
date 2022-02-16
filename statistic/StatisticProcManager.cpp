@@ -3,6 +3,8 @@
 
 void StatisticProcManager::OnProcScheduled(AsyncProc* proc)
 {
+	AutoMutex am(m_infoMapMutex);
+
 	StatisticProc* sProc = dynamic_cast<StatisticProc*>(proc);
 	assert(sProc);
 
@@ -11,6 +13,20 @@ void StatisticProcManager::OnProcScheduled(AsyncProc* proc)
 		return;
 
 	++spi->countScheduled;
+}
+
+void StatisticProcManager::OnProcOverflowed(AsyncProc* proc)
+{
+	AutoMutex am(m_infoMapMutex);
+
+	StatisticProc* sProc = dynamic_cast<StatisticProc*>(proc);
+	assert(sProc);
+
+	StatisticProcInfo* spi = ObtainInfo(sProc->GetName());
+	if (!spi)
+		return;
+
+	++spi->countOverflowed;
 }
 
 void StatisticProcManager::OnProcDone(const AsyncProcResult& result)

@@ -17,6 +17,7 @@
 
 const int	WORK_THREAD_COUNT = 2000;
 const int	TICK_THREAD_COUNT = 1000;
+const int	MAX_WAIT_SIZE = 10000;
 
 const int	AUTO_SCHEDULE_SLEEP_MILLISECONDS = 1;
 const float AUTO_SCHEDULE_SECONDS_MIN = 0.0f;
@@ -29,7 +30,7 @@ const float	PROC_SLEEP_SECONDS_MIN = 0.0f;
 const float	PROC_SLEEP_SECONDS_MAX = 1.0f;
 const float PROC_HAS_CALLBACK_RATIO = 0.5f;
 const float PROC_ERROR_RATIO = 0.5f;
-const float PROC_SORT_RATIO = 0.5f;
+const float PROC_SORT_RATIO = 0.f;
 
 const int	ECHO_SLEEP_MILLISECONDS = 1000;
 
@@ -127,9 +128,9 @@ void ShowStatistics()
 	apm->GetStatisticInfos(infoMap);
 	for (StatisticProcInfoMap::iterator it = infoMap.begin(); it != infoMap.end(); ++it)
 	{
-		printf("\"%s\": count=%lu/%lu (%luok, %luerr), cost=%.2f (%.2f-%.2f)\n",
+		printf("\"%s\": count=%lu/%lu (%luok, %luerr, %luoverflow), cost=%.2f (%.2f-%.2f)\n",
 			it->first.c_str(), (unsigned long)it->second.countDone(), (unsigned long)it->second.countScheduled,
-			(unsigned long)it->second.countFinish, (unsigned long)it->second.countException,
+			(unsigned long)it->second.countFinish, (unsigned long)it->second.countException, (unsigned long)it->second.countOverflowed,
 			it->second.costSecondsAverage(), it->second.costSecondsMin, it->second.costSecondsMax);
 	}
 	printf("------------------------------------------------------------\n");
@@ -200,7 +201,7 @@ int main()
 
 	srand(clock());
 	apm = new StatisticProcManager();
-	apm->Startup(WORK_THREAD_COUNT);
+	apm->Startup(WORK_THREAD_COUNT, MAX_WAIT_SIZE);
 	aliveTick = true;
 	aliveInfo = true;
 	infoClock = clock();

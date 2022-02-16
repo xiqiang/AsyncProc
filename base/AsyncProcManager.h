@@ -18,12 +18,13 @@ public:
 
 public:
 	virtual void OnProcScheduled(AsyncProc* proc) {}
+	virtual void OnProcOverflowed(AsyncProc* proc) {}
 	virtual void OnProcDone(const AsyncProcResult& result) {}
 	virtual void OnThreadPickWork(AP_Thread thread_id, AsyncProc* proc) {}
 	virtual void OnThreadSleep(AP_Thread thread_id) {}
 
 public:
-	void Startup(int threadCount = 1);
+	void Startup(int threadCount = 4, size_t maxWaitSize = 65535);
 	void Shutdown(AsyncProcShutdownMode mode = AsyncProcShutdown_Normal);
 	void Tick(void);
 
@@ -104,6 +105,8 @@ private:
 
 	ResultDequeMap m_callbackDequeMap;
 	Mutex m_callbackDequeMutex;
+
+	size_t m_maxWaitSize;
 	size_t m_callbackSize;
 };
 

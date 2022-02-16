@@ -14,6 +14,7 @@ public:
 
 public:
 	virtual void OnProcScheduled(AsyncProc* proc);
+	virtual void OnProcOverflowed(AsyncProc* proc);
 	virtual void OnProcDone(const AsyncProcResult& result);
 	virtual void OnThreadPickWork(AP_Thread thread_id, AsyncProc* proc);
 	virtual void OnThreadSleep(AP_Thread thread_id);
