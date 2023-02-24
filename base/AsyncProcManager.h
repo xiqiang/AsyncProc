@@ -28,14 +28,14 @@ public:
 	void Shutdown(AsyncProcShutdownMode mode = AsyncProcShutdown_Normal);
 	void Tick(void);
 
-	void Schedule(AsyncProc* proc, int priority = 0, bool sortNow = true);
-	void Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority = 0, bool sortNow = true);
+	bool Schedule(AsyncProc* proc, int priority = 0, bool sortNow = true);
+	bool Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority = 0, bool sortNow = true);
 
 	template<typename T>
-	void Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result), int priority = 0, bool sortNow = true) {
+	bool Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result), int priority = 0, bool sortNow = true) {
 		assert(proc);
 		proc->SetCallback(pVar, pMemberFun);
-		Schedule(proc, priority, sortNow);
+		return Schedule(proc, priority, sortNow);
 	}
 
 	void Sort();

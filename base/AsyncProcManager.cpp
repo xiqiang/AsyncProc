@@ -82,7 +82,7 @@ struct AsyncProcGreater
 	}
 };
 
-void AsyncProcManager::Schedule(AsyncProc* proc, int priority /*= 0*/, bool sortNow /*= true*/)
+bool AsyncProcManager::Schedule(AsyncProc* proc, int priority /*= 0*/, bool sortNow /*= true*/)
 {
 	assert(proc);
 	proc->SetScheduleThreadId(AP_GetThreadId());
@@ -94,7 +94,7 @@ void AsyncProcManager::Schedule(AsyncProc* proc, int priority /*= 0*/, bool sort
 		{
 			OnProcOverflowed(proc);
 			delete proc;
-			return;
+			return false;
 		}
 	}
 
@@ -108,13 +108,14 @@ void AsyncProcManager::Schedule(AsyncProc* proc, int priority /*= 0*/, bool sort
 	}
 
 	m_procCondition.Wake();
+	return true;
 }
 
-void AsyncProcManager::Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority /*= 0*/, bool sortNow /*= true*/)
+bool AsyncProcManager::Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority /*= 0*/, bool sortNow /*= true*/)
 {
 	assert(proc);
 	proc->SetCallback(fun);
-	Schedule(proc, priority, sortNow);
+	return Schedule(proc, priority, sortNow);
 }
 
 void AsyncProcManager::Sort()
