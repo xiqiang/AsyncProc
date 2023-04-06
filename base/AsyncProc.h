@@ -34,8 +34,13 @@ public:
 
 public:
 	template<typename T>
-	void SetCallback(T* pVar, void(T::*pMemberFun)(const AsyncProcResult& result)) {
-		m_caller = new AsyncProcMemberCaller<T>(pVar, pMemberFun);
+	bool SetCallback(T* pVar, void(T::*pMemberFun)(const AsyncProcResult& result)) {
+		try {
+			m_caller = new AsyncProcMemberCaller<T>(pVar, pMemberFun);
+			return m_caller != NULL;
+		} catch (std::bad_alloc&) {
+			return false;
+		}
 	}
 
 	void SetCallback(AsyncProcCallback fun) {

@@ -32,6 +32,7 @@ const int	NEW_PROC_COUNT_MAX = 3;
 const float	PROC_SLEEP_SECONDS_MIN = 0.0f;
 const float	PROC_SLEEP_SECONDS_MAX = 1.0f;
 const float PROC_HAS_CALLBACK_RATIO = 0.5f;
+const float PROC_MEMFUNC_CALLBACK_RATIO = 0.5f;
 const float PROC_ERROR_RATIO = 0.5f;
 const float PROC_SORT_RATIO = 0.f;
 
@@ -65,6 +66,15 @@ private:
 	float m_errRatio;
 };
 
+class MemFuncType {
+public:
+	void OnProcCallback(const AsyncProcResult& result) {
+		DemoProc* proc = dynamic_cast<DemoProc*>(result.proc);
+		assert(proc);
+		//printf("MemFuncType::OnProcCallback(proc=%p, thread=%lu, costSeconds=%f, result=%d, what=%s)\n", proc, result.thread_id, result.costSeconds, result.type, result.what.c_str());
+	}
+};
+
 #if defined(_WIN32) || defined(_WIN64)
 DWORD cycleThreadId[TICK_THREAD_COUNT];
 HANDLE cycleHandle[TICK_THREAD_COUNT];
@@ -77,6 +87,7 @@ int infoThreadCreateRet;
 #endif
 
 StatisticProcManager* apm = NULL;
+MemFuncType mft;
 int tickThreadCount = 0;
 bool aliveTick = false;
 bool aliveInfo = false;
@@ -114,10 +125,15 @@ void Schedule(const char* name, int priority)
 				return;
 
 			proc->SetPriority(priority);
-			if (rand() / (float)RAND_MAX < PROC_HAS_CALLBACK_RATIO)
-				apm->Schedule(proc, demoProcCallback);
-			else
+			if (rand() / (float)RAND_MAX < PROC_HAS_CALLBACK_RATIO) {
+				if (rand() / (float)RAND_MAX < PROC_MEMFUNC_CALLBACK_RATIO)
+					apm->Schedule(proc, &mft, &MemFuncType::OnProcCallback);
+				else
+					apm->Schedule(proc, demoProcCallback);
+			}
+			else {
 				apm->Schedule(proc);
+			}
 		}
 	}
 	catch (std::bad_alloc&) {
