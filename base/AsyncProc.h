@@ -1,6 +1,7 @@
 #ifndef AsyncProc_H_Xiqiang_20190907
 #define AsyncProc_H_Xiqiang_20190907
 
+#include <time.h>
 #include "AsyncProcDef.h"
 
 struct AsyncProcResult;
@@ -9,13 +10,17 @@ class AsyncProc
 {
 public:
 	friend class AsyncProcManager;
+	friend class AsyncProcThread;
 
 public:
 	AsyncProc()
 	    : m_callback(NULL)
     	, m_caller(NULL) 
+		, m_priority(0)
 		, m_scheduleThreadId(0)
-		, m_priority(0) {
+		, m_scheduleClock(0)
+		, m_exeBeginClock(0)
+		, m_exeEndClock(0) {
 	}
 
 	virtual ~AsyncProc(void) {
@@ -25,7 +30,7 @@ public:
 		}		
 	}
 
-	virtual void Execute(void) {}
+	virtual void Execute(void) = 0;
 
 public:
 	template<typename T>
@@ -49,28 +54,62 @@ public:
 			m_caller->Invoke(result);
 	}
 
+public:
 	AP_Thread GetScheduleThreadId(void) const {
 		return m_scheduleThreadId;
-	}
-
-	int GetPriority() {
-		return m_priority;
-	}
-
-private:
-	void SetScheduleThreadId(AP_Thread thread_id) {
-		m_scheduleThreadId = thread_id;
 	}
 
 	void SetPriority(int value) {
 		m_priority = value;
 	}
 
+	int GetPriority() {
+		return m_priority;
+	}
+
+	clock_t GetScheduleClock() {
+		return m_scheduleClock;
+	}
+
+	clock_t GetExeBeginClock(){
+		return m_exeBeginClock;
+	}
+
+	clock_t GetExeEndClock(){
+		return m_exeEndClock;
+	}
+
 private:
-	AsyncProcCallback m_callback;
-	AsyncProcCaller* m_caller;
-	AP_Thread m_scheduleThreadId;
-	int m_priority;
+	void Init(AP_Thread thread_id) {
+		m_scheduleThreadId = thread_id;
+		m_scheduleClock = clock();
+	}
+
+	void ResetExeBeginClock() {
+		m_exeBeginClock = clock();
+	}
+
+	void ResetExeEndClock() {
+		m_exeEndClock = clock();
+	}
+
+private:
+	AsyncProcCallback	m_callback;
+	AsyncProcCaller*	m_caller;
+	int					m_priority;
+	AP_Thread			m_scheduleThreadId;
+	clock_t				m_scheduleClock;
+	clock_t				m_exeBeginClock;
+	clock_t				m_exeEndClock;
 };
+
+struct AsyncProcLess
+{
+	bool operator()(AsyncProc* l, AsyncProc* r) {
+		return l->GetPriority() < r->GetPriority();
+	}
+};
+
+typedef std::priority_queue<AsyncProc*, std::deque<AsyncProc*>, AsyncProcLess> ProcPriorityQueue;
 
 #endif

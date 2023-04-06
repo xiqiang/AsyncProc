@@ -2,7 +2,7 @@
 #define AsyncProcDef_H_Xiqiang_20200901
 
 #include <vector>
-#include <deque>
+#include <queue>
 #include <map>
 #include <string>
 
@@ -60,6 +60,9 @@ private:
 	MemberFun	m_fun;
 };
 
+// Misc
+// -----------------
+
 enum AsyncProcShutdownMode
 {
 	AsyncProcShutdown_Normal,
@@ -67,9 +70,7 @@ enum AsyncProcShutdownMode
 };
 
 typedef std::vector<AsyncProcThread*>		ThreadVector;
-typedef std::deque<AsyncProc*>				ProcDeque;
 typedef std::deque<AsyncProcResult>			ResultDeque;
-typedef std::vector<AsyncProcResult>		ResultVector;
 typedef std::map<AP_Thread, ResultDeque>	ResultDequeMap;
 typedef std::map<AP_Thread, std::string>	WorkingNameMap;
 

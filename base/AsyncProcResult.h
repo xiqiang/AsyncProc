@@ -7,22 +7,21 @@ struct AsyncProcResult
 {
 	enum Type
 	{
-		FINISH,
-		EXCEPTION,
+		SUCCESS,
+		EXECUTE_EXCEPTION,
+		CALLBACK_ERROR,
 	};
 
 	AsyncProcResult()
 		: proc(NULL)
-		, costSeconds(0.0f)
-		, type(FINISH)
+		, type(SUCCESS)
 		, thread_id(0)
 	{}
 
-	AsyncProc* proc;
-	float costSeconds;
-	Type type;
-	std::string what;
-	AP_Thread thread_id;
+	AsyncProc*		proc;
+	Type			type;
+	AP_Thread		thread_id;
+	std::string		what;
 
 };
 

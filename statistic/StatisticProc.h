@@ -10,7 +10,8 @@ class StatisticProc
 public:
 	StatisticProc(const std::string& name)
 		: m_name(name)
-	{
+		, m_scheduleClock(0)
+		, m_executeClock(0) {
 	}
 
 	const std::string& GetName() const {
@@ -18,7 +19,9 @@ public:
 	}
 
 private:
-	std::string m_name;
+	std::string		m_name;
+	clock_t			m_scheduleClock;
+	clock_t			m_executeClock;
 };
 
 #endif

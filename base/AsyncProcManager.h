@@ -20,33 +20,35 @@ public:
 	virtual void OnProcScheduled(AsyncProc* proc) {}
 	virtual void OnProcOverflowed(AsyncProc* proc) {}
 	virtual void OnProcDone(const AsyncProcResult& result) {}
+	
+	virtual void OnThreadAwake(AP_Thread thread_id) {}							// NOTICE: under m_waitQueueMutex be locked outside
+	virtual void OnThreadSleep(AP_Thread thread_id) {}							// NOTICE: under m_waitQueueMutex be locked outside
 	virtual void OnThreadPickWork(AP_Thread thread_id, AsyncProc* proc) {}
-	virtual void OnThreadSleep(AP_Thread thread_id) {}
 
 public:
 	void Startup(int threadCount = 4, size_t maxWaitSize = 65535);
 	void Shutdown(AsyncProcShutdownMode mode = AsyncProcShutdown_Normal);
 	void Tick(void);
 
-	bool Schedule(AsyncProc* proc, int priority = 0, bool sortNow = true);
-	bool Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority = 0, bool sortNow = true);
+	bool Schedule(AsyncProc* proc);
+	bool Schedule(AsyncProc* proc, AsyncProcCallback fun);
 
 	template<typename T>
-	bool Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result), int priority = 0, bool sortNow = true) {
+	bool Schedule(AsyncProc* proc, T* pVar, void(T::* pMemberFun)(const AsyncProcResult& result)) {
 		assert(proc);
 		proc->SetCallback(pVar, pMemberFun);
-		return Schedule(proc, priority, sortNow);
+		return Schedule(proc);
 	}
 
-	void Sort();
+	bool AddThread();
 
-	void GetCallbackDequeMap(ResultDequeMap& outResultDequeMap);
+public:
 	size_t GetCallbackSize() {
 		return m_callbackSize;
 	}
 
 	size_t GetActiveThreadCount() {
-		AutoMutex am(m_waitDequeMutex);
+		AutoMutex am(m_waitQueueMutex);
 		return m_activeThreadCount;
 	}
 
@@ -56,21 +58,19 @@ public:
 	}
 
 	size_t GetWaitDequeSize() {
-		AutoMutex am(m_waitDequeMutex);
-		return m_waitDeque.size();
+		AutoMutex am(m_waitQueueMutex);
+		return m_waitQueue.size();
 	}
 
 protected:
-	void EnqueueCallback(const AsyncProcResult& result);
-	void NotifyProcDone(const AsyncProcResult& result);
-	ResultDeque* GetCallbackDeque(AP_Thread thread_id);
+	ResultDeque* GetCallbackDeque(AP_Thread thread_id, bool autoCreate);
 
-	ProcDeque& GetWaitDeque(void) {
-		return m_waitDeque;					// lock outside
+	ProcPriorityQueue& GetWaitDeque(void) {
+		return m_waitQueue;									// m_waitQueueMutex must be locked outside
 	}
 
 	Mutex& GetWaitDequeMutex(void) {
-		return m_waitDequeMutex;
+		return m_waitQueueMutex;
 	}
 
 	Mutex& GetCallbackDequeMutex(void) {
@@ -81,33 +81,30 @@ protected:
 		return m_procCondition;
 	}
 
-	void IncActiveThread(AP_Thread thread_id) {
-		++m_activeThreadCount;						// lock waitDeque outside
-	}
-
-	void DecActiveThread(AP_Thread thread_id) {
-		--m_activeThreadCount;						// lock waitDeque outside
-		OnThreadSleep(thread_id);
-	}
+private:
+	void NotifyProcDone(const AsyncProcResult& result);		// called by AsyncProcThread
+	void EnqueueCallback(AsyncProcResult& result);			// called by AsyncProcThread
+	void IncActiveThread(AP_Thread thread_id);				// called by AsyncProcThread
+	void DecActiveThread(AP_Thread thread_id);				// called by AsyncProcThread
 
 private:
 	void _ShutdownThreads(AsyncProcShutdownMode mode);
 	void _ClearProcs(void);
 
 private:
-	size_t m_activeThreadCount;
-	ThreadVector m_threads;
-	Mutex m_threadMutex;
+	size_t				m_activeThreadCount;
+	ThreadVector		m_threads;
+	Mutex				m_threadMutex;
 
-	ProcDeque m_waitDeque;
-	Mutex m_waitDequeMutex;
-	Condition m_procCondition;
+	ProcPriorityQueue	m_waitQueue;
+	Mutex				m_waitQueueMutex;
+	Condition			m_procCondition;
 
-	ResultDequeMap m_callbackDequeMap;
-	Mutex m_callbackDequeMutex;
+	ResultDequeMap		m_callbackDequeMap;
+	Mutex				m_callbackDequeMutex;
 
-	size_t m_maxWaitSize;
-	size_t m_callbackSize;
+	size_t				m_maxWaitSize;
+	size_t				m_callbackSize;
 };
 
 #endif

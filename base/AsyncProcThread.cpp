@@ -26,7 +26,6 @@ AsyncProcThread::AsyncProcThread(AsyncProcManager* manager)
 	, m_tid(0)
 	, m_state(State_None)
 	, m_proc(NULL)
-	, m_clock(0)
 #if defined(_WIN32) || defined(_WIN64)
 	, m_hThread(INVALID_HANDLE_VALUE)
 #endif
@@ -47,10 +46,7 @@ bool AsyncProcThread::Startup(void)
 	ret = (m_hThread != NULL);
 #elif defined(__LINUX__)
 	ret = pthread_create(&m_tid, NULL, ThreadFunc, (void*)this) == 0;
-#endif	
-
-	if(ret)
-		m_state = State_Running;
+#endif
 		
 	//printf("AsyncProcThread::Startup(thread=%lu)\n", m_tid);
 
@@ -83,13 +79,20 @@ void AsyncProcThread::ShutdownWait(void)
 
 void AsyncProcThread::_Execute()
 {
+	assert(m_manager);
+	m_state = State_Running;
 	AP_Thread thread_id = AP_GetThreadId();
+
+	{
+		AutoMutex am(m_manager->GetWaitDequeMutex());
+		m_manager->IncActiveThread(thread_id);
+	}
 
 	while(true)
 	{
 		{
 			AutoMutex am(m_manager->GetWaitDequeMutex());
-			ProcDeque& waitDeque = m_manager->GetWaitDeque();
+			ProcPriorityQueue& waitDeque = m_manager->GetWaitDeque();
 
 			switch (m_state)
 			{
@@ -106,8 +109,8 @@ void AsyncProcThread::_Execute()
 				{
 					//printf("AsyncProcThread::Sleep(m_tid=%lu)\n", m_tid);
 					m_manager->DecActiveThread(thread_id);
-					m_manager->GetProcCondition().Sleep();						// Auto unlock dequeMutex when sleeped
-					m_manager->IncActiveThread(thread_id);						// Auto lock dequeMutex when awoken
+					m_manager->GetProcCondition().Sleep();						// Auto unlock dequeMutex when sleeped, and lock dequeMutex when awoken
+					m_manager->IncActiveThread(thread_id);
 					//printf("AsyncProcThread::Wake(m_tid=%lu)\n", m_tid);
 				}
 
@@ -119,21 +122,22 @@ void AsyncProcThread::_Execute()
 				continue;
 			}
 
-			m_proc = waitDeque.front();
+			m_proc = waitDeque.top();
+			waitDeque.pop();
 			assert(m_proc);
-			waitDeque.pop_front();
-			m_manager->OnThreadPickWork(thread_id, m_proc);
 		}
+
+		m_manager->OnThreadPickWork(thread_id, m_proc);
 
 		try
 		{
-			m_clock = clock();
+			m_proc->ResetExeBeginClock();
 			m_proc->Execute();
-			_ProcDone(AsyncProcResult::FINISH, NULL);
+			_ProcDone(AsyncProcResult::SUCCESS, NULL);
 		}
 		catch (const std::exception & e)
 		{
-			_ProcDone(AsyncProcResult::EXCEPTION, e.what());
+			_ProcDone(AsyncProcResult::EXECUTE_EXCEPTION, e.what());
 		}
 #if defined(__LINUX__)
 		catch (abi::__forced_unwind&)
@@ -144,16 +148,18 @@ void AsyncProcThread::_Execute()
 #endif
 		catch (...)
 		{
-			_ProcDone(AsyncProcResult::EXCEPTION, "exception...");
+			_ProcDone(AsyncProcResult::EXECUTE_EXCEPTION, "exception...");
 		}
 	}	
 }
 
 void AsyncProcThread::_ProcDone(AsyncProcResult::Type type, const char* what)
 {
+	assert(m_proc);
+	m_proc->ResetExeEndClock();
+
 	AsyncProcResult result;
 	result.proc = m_proc;
-	result.costSeconds = (clock() - m_clock) / (float)CLOCKS_PER_SEC;
 	result.type = type;
 	result.thread_id = m_tid;
 	if(what)

@@ -5,8 +5,8 @@
 
 AsyncProcManager::AsyncProcManager()
 	: m_activeThreadCount(0)
-	, m_waitDequeMutex()
-	, m_procCondition(&m_waitDequeMutex)
+	, m_waitQueueMutex()
+	, m_procCondition(&m_waitQueueMutex)
 	, m_maxWaitSize(0)
 	, m_callbackSize(0)
 {
@@ -25,24 +25,8 @@ void AsyncProcManager::Startup(int threadCount /*= 1*/, size_t maxWaitSize /*= 6
 	assert(maxWaitSize > 0);
 	m_maxWaitSize = maxWaitSize;
 
-	AutoMutex am_thread(m_threadMutex);
 	for (int t = 0; t < threadCount; ++t)
-	{
-		AsyncProcThread* thread = new AsyncProcThread(this);
-		if (!thread)
-			break;
-
-		if (thread->Startup())
-		{
-			m_threads.push_back(thread);
-			AutoMutex am_deque(m_waitDequeMutex);
-			IncActiveThread(thread->GetId());
-		}
-		else
-		{
-			delete thread;
-		}
-	}
+		AddThread();
 }
 
 void AsyncProcManager::Shutdown(AsyncProcShutdownMode mode /*= AsyncProcShutdown_Normal*/)
@@ -58,110 +42,157 @@ void AsyncProcManager::Tick()
 	if (0 == m_callbackSize)
 		return;
 
-	m_callbackDequeMutex.Lock();
-	ResultDeque* resultDeque = GetCallbackDeque(AP_GetThreadId());
-	if (!resultDeque || resultDeque->empty())
+	ResultDeque tmpCallbacks;
+
 	{
-		m_callbackDequeMutex.Unlock();
-		return;
+		AutoMutex am(m_callbackDequeMutex);
+		ResultDeque* callbackDeque = GetCallbackDeque(AP_GetThreadId(), false);
+		if (!callbackDeque || callbackDeque->empty())
+			return;
+
+		tmpCallbacks.swap(*callbackDeque);
+		m_callbackSize -= tmpCallbacks.size();
 	}
 
-	ResultVector results(resultDeque->begin(), resultDeque->end());
-	m_callbackSize -= resultDeque->size();
-	resultDeque->clear();
-	m_callbackDequeMutex.Unlock();
-
-	for (ResultVector::iterator it = results.begin(); it != results.end(); ++it)
+	for (ResultDeque::iterator it = tmpCallbacks.begin(); it != tmpCallbacks.end(); ++it)
 		NotifyProcDone(*it);
 }
 
-struct AsyncProcGreater
-{
-	bool operator()(AsyncProc* l, AsyncProc* r) {
-		return l->GetPriority() > r->GetPriority();
-	}
-};
-
-bool AsyncProcManager::Schedule(AsyncProc* proc, int priority /*= 0*/, bool sortNow /*= true*/)
+bool AsyncProcManager::Schedule(AsyncProc* proc)
 {
 	assert(proc);
-	proc->SetScheduleThreadId(AP_GetThreadId());
-	proc->SetPriority(priority);
-
-	{
-		AutoMutex am(m_waitDequeMutex);
-		if (m_waitDeque.size() >= m_maxWaitSize)
-		{
-			OnProcOverflowed(proc);
-			delete proc;
-			return false;
-		}
-	}
-
+	proc->Init(AP_GetThreadId());
 	OnProcScheduled(proc);
 
+	bool overflow = false;
+	try
 	{
-		AutoMutex am(m_waitDequeMutex);
-		m_waitDeque.push_back(proc);
-		if (sortNow)
-			std::sort(m_waitDeque.begin(), m_waitDeque.end(), AsyncProcGreater());
+		AutoMutex am(m_waitQueueMutex);
+		if (m_waitQueue.size() < m_maxWaitSize)
+			m_waitQueue.push(proc);
+		else
+			overflow = true;
+	}
+	catch (std::bad_alloc&)
+	{
+		overflow = true;
+	}
+
+	if (overflow)
+	{
+		OnProcOverflowed(proc);
+		delete proc;
+		return false;
 	}
 
 	m_procCondition.Wake();
 	return true;
 }
 
-bool AsyncProcManager::Schedule(AsyncProc* proc, AsyncProcCallback fun, int priority /*= 0*/, bool sortNow /*= true*/)
+bool AsyncProcManager::Schedule(AsyncProc* proc, AsyncProcCallback fun)
 {
 	assert(proc);
 	proc->SetCallback(fun);
-	return Schedule(proc, priority, sortNow);
+	return Schedule(proc);
 }
 
-void AsyncProcManager::Sort()
+bool AsyncProcManager::AddThread()
 {
-	AutoMutex am(m_waitDequeMutex);
-	std::sort(m_waitDeque.begin(), m_waitDeque.end(), AsyncProcGreater());
-}
-
-void AsyncProcManager::GetCallbackDequeMap(ResultDequeMap& outResultDequeMap) 
-{
-	AutoMutex am(m_callbackDequeMutex);
-	outResultDequeMap.clear();
-	outResultDequeMap.insert(m_callbackDequeMap.begin(), m_callbackDequeMap.end());
-}
-
-void AsyncProcManager::EnqueueCallback(const AsyncProcResult& result)
-{
-	AutoMutex am(m_callbackDequeMutex);
-	ResultDeque* resultDeque = GetCallbackDeque(result.proc->GetScheduleThreadId());
-	if (resultDeque)
+	try
 	{
-		resultDeque->push_back(result);
-		++m_callbackSize;
+		AsyncProcThread* thread = new AsyncProcThread(this);
+		if (!thread)
+			return false;
+
+		if (thread->Startup())
+		{
+			AutoMutex am_thread(m_threadMutex);
+			m_threads.push_back(thread);
+			return true;
+		}
+		else
+		{
+			delete thread;
+			return false;
+		}
+	}
+	catch (std::bad_alloc&)
+	{
+		return false;
+	}
+}
+
+ResultDeque* AsyncProcManager::GetCallbackDeque(AP_Thread thread_id, bool autoCreate)
+{
+	// NOTICE: under m_callbackDequeMutex be locked outside
+
+	ResultDequeMap::iterator it = m_callbackDequeMap.find(thread_id);
+	if (it != m_callbackDequeMap.end())
+		return &(it->second);
+
+	if (!autoCreate)
+		return NULL;
+
+	try
+	{
+		std::pair<ResultDequeMap::iterator, bool> ret = m_callbackDequeMap.insert(
+			std::pair<AP_Thread, ResultDeque>(thread_id, ResultDeque()));
+
+		if (ret.second)
+			return &(ret.first->second);
+		else
+			return NULL;
+	}
+	catch (std::bad_alloc&)
+	{
+		return NULL;
 	}
 }
 
 void AsyncProcManager::NotifyProcDone(const AsyncProcResult& result)
 {
-	result.proc->InvokeCallback(result);
+	result.proc->InvokeCallback(result);	// Do nothing when !HasCallback()
+
 	OnProcDone(result);
 	delete result.proc;
 }
 
-ResultDeque* AsyncProcManager::GetCallbackDeque(AP_Thread thread_id)
+void AsyncProcManager::EnqueueCallback(AsyncProcResult& result)
 {
-	ResultDequeMap::iterator it = m_callbackDequeMap.find(thread_id);
-	if (it != m_callbackDequeMap.end())
-		return &(it->second);
+	try
+	{
+		AutoMutex am(m_callbackDequeMutex);
+		ResultDeque* resultDeque = GetCallbackDeque(result.proc->GetScheduleThreadId(), true);
+		if (resultDeque)
+		{
+			resultDeque->push_back(result);
+			++m_callbackSize;
+			return;
+		}
+	}
+	catch (std::bad_alloc&)
+	{
+	}
 
-	std::pair<ResultDequeMap::iterator, bool> ret = m_callbackDequeMap.insert(
-		std::pair<AP_Thread, ResultDeque>(thread_id, ResultDeque()));
+	result.type = AsyncProcResult::CALLBACK_ERROR;
+	OnProcDone(result);
+	delete result.proc;
+}
 
-	if (!ret.second)
-		return NULL;
-	else
-		return &(ret.first->second);
+void AsyncProcManager::IncActiveThread(AP_Thread thread_id) 
+{
+	// NOTICE: under m_waitQueueMutex be locked outside
+
+	++m_activeThreadCount;
+	OnThreadAwake(thread_id);
+}
+
+void AsyncProcManager::DecActiveThread(AP_Thread thread_id) 
+{
+	// NOTICE: under m_waitQueueMutex be locked outside
+
+	--m_activeThreadCount;
+	OnThreadSleep(thread_id);
 }
 
 void AsyncProcManager::_ShutdownThreads(AsyncProcShutdownMode mode)
@@ -169,18 +200,19 @@ void AsyncProcManager::_ShutdownThreads(AsyncProcShutdownMode mode)
 	//printf("AsyncProcManager::_ShutdownThreads(mode=%d)\n", mode);
 
 	ThreadVector waitingThread;
+
 	{
 		AutoMutex am(m_threadMutex);
 		if (m_threads.empty())
 			return;
 
-		for (ThreadVector::iterator it = m_threads.begin();
-			it != m_threads.end(); ++it)
-		{
-			(*it)->ShutdownNotify(mode);
-		}
-
 		waitingThread = m_threads;
+	}
+
+	for (ThreadVector::iterator it = waitingThread.begin();
+		it != waitingThread.end(); ++it)
+	{
+		(*it)->ShutdownNotify(mode);
 	}
 
 	m_procCondition.WakeAll();
@@ -198,6 +230,7 @@ void AsyncProcManager::_ShutdownThreads(AsyncProcShutdownMode mode)
 		{
 			delete* it;
 		}
+		
 		m_threads.clear();
 		m_activeThreadCount = 0;
 	}
@@ -208,13 +241,13 @@ void AsyncProcManager::_ClearProcs(void)
 	//printf("AsyncProcManager::_ClearProcs()\n");
 
 	{
-		AutoMutex am(m_waitDequeMutex);
-		for (ProcDeque::iterator it = m_waitDeque.begin();
-			it != m_waitDeque.end(); ++it)
+		AutoMutex am(m_waitQueueMutex);
+		while (!m_waitQueue.empty())
 		{
-			delete *it;
+			AsyncProc* proc = m_waitQueue.top();
+			delete proc;
+			m_waitQueue.pop();
 		}
-		m_waitDeque.clear();
 	}
 
 	{

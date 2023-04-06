@@ -15,22 +15,28 @@
 #include "statistic/StatisticProc.h"
 #include "statistic/StatisticProcManager.h"
 
-const int	WORK_THREAD_COUNT = 2000;
-const int	TICK_THREAD_COUNT = 1000;
-const int	MAX_WAIT_SIZE = 10000;
+const int	WORK_THREAD_COUNT = 1024;
+const int	TICK_THREAD_COUNT = 1024;
+const int	MAX_WAIT_SIZE = 200000;
 
-const int	AUTO_SCHEDULE_SLEEP_MILLISECONDS = 1;
+const int	ADD_WORK_THREAD_COUNT_MIN = 1;
+const int	ADD_WORK_THREAD_COUNT_MAX = 4;
+
+const int	AUTO_SCHEDULE_SLEEP_MILLISECONDS = 10;
 const float AUTO_SCHEDULE_SECONDS_MIN = 0.0f;
 const float AUTO_SCHEDULE_SECONDS_MAX = 1.0f;
 
-const int	NEW_PROC_COUNT_MIN = 0;
-const int	NEW_PROC_COUNT_MAX = 5;
+const int	NEW_PROC_COUNT_MIN = 1;
+const int	NEW_PROC_COUNT_MAX = 3;
 
 const float	PROC_SLEEP_SECONDS_MIN = 0.0f;
 const float	PROC_SLEEP_SECONDS_MAX = 1.0f;
 const float PROC_HAS_CALLBACK_RATIO = 0.5f;
 const float PROC_ERROR_RATIO = 0.5f;
 const float PROC_SORT_RATIO = 0.f;
+
+const bool	PROC_PRIORITY_RANDOM = false;
+const int	PROC_PRIORITY_RANGE = 10000;
 
 const int	ECHO_SLEEP_MILLISECONDS = 1000;
 
@@ -67,12 +73,15 @@ HANDLE infoHandle;
 #elif defined(__LINUX__)
 pthread_t cycleThreadId[TICK_THREAD_COUNT];
 pthread_t infoThreadId;
+int infoThreadCreateRet;
 #endif
 
 StatisticProcManager* apm = NULL;
+int tickThreadCount = 0;
 bool aliveTick = false;
 bool aliveInfo = false;
 bool autoSchedule = true;
+bool autoInfo = true;
 bool fastQuit = false;
 clock_t infoClock;
 
@@ -93,57 +102,71 @@ void demoProcCallback(const AsyncProcResult& result)
 	//printf("demoProcCallback(proc=%p, thread=%lu, costSeconds=%f, result=%d, what=%s)\n", proc, result.thread_id, result.costSeconds, result.type, result.what.c_str());
 }
 
-void Schedule(const char* name) 
+void Schedule(const char* name, int priority)
 {
-	int count = RangeRand(NEW_PROC_COUNT_MIN, NEW_PROC_COUNT_MAX);
-	for (int i = 0; i < count; ++i) {
-		float duration = RangeRand(PROC_SLEEP_SECONDS_MIN, PROC_SLEEP_SECONDS_MAX);
-		DemoProc* proc = new DemoProc(name, duration, PROC_ERROR_RATIO);
-		bool sortNow = rand() / (float)RAND_MAX < PROC_SORT_RATIO;
+	try {
+		int count = RangeRand(NEW_PROC_COUNT_MIN, NEW_PROC_COUNT_MAX);
+		for (int i = 0; i < count; ++i) {
+			float duration = RangeRand(PROC_SLEEP_SECONDS_MIN, PROC_SLEEP_SECONDS_MAX);
 
-		if (rand() / (float)RAND_MAX < PROC_HAS_CALLBACK_RATIO)
-			apm->Schedule(proc, demoProcCallback, rand() % 1000, sortNow);
-		else
-			apm->Schedule(proc, rand() % 1000, sortNow);
+			DemoProc* proc = new DemoProc(name, duration, PROC_ERROR_RATIO);
+			if (!proc)
+				return;
+
+			proc->SetPriority(priority);
+			if (rand() / (float)RAND_MAX < PROC_HAS_CALLBACK_RATIO)
+				apm->Schedule(proc, demoProcCallback);
+			else
+				apm->Schedule(proc);
+		}
+	}
+	catch (std::bad_alloc&) {
+		autoSchedule = false;
+		printf("\nNot enough memory! autoSchedule stopped.\n");
 	}
 }
 
 void ShowStatistics()
 {
 	printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-	printf("activeThread: %lu/%lu, waitQueue: %lu\n", (unsigned long)apm->GetActiveThreadCount(),
-		(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitDequeSize());
+	printf("threads: active=%lu/%lu\n", 
+		(unsigned long)apm->GetActiveThreadCount(), (unsigned long)apm->GetThreadCount());
 
 	WorkingNameMap workingNameMap;
 	apm->GetWorkingNameMap(workingNameMap);
 	for (WorkingNameMap::iterator it = workingNameMap.begin(); it != workingNameMap.end(); ++it)
-		printf("workThread[%lu].proc: \"%s\"\n", (unsigned long)it->first, it->second.c_str());
+		printf("thread[%lu].proc: \"%s\"\n", (unsigned long)it->first, it->second.c_str());
 
-	ResultDequeMap resultDequeMap;
-	apm->GetCallbackDequeMap(resultDequeMap);
-	for (ResultDequeMap::iterator it = resultDequeMap.begin(); it != resultDequeMap.end(); ++it)
-		printf("tickThread[%lu].resultQueue: %lu\n", (unsigned long)it->first, (unsigned long)it->second.size());
+	printf("\nprocs:\ttotal=%lu, wait=%lu, drop=%lu, finish=%lu/%lu(%lu.ok, %lu.exc, %lu.err)\n", 
+		(unsigned long)apm->GetTotalScheduled(), (unsigned long)apm->GetWaitDequeSize(), (unsigned long)apm->GetTotalOverflowed(), 
+		(unsigned long)apm->GetTotalFinishCount(), (unsigned long)apm->GetTotalQueuedCount(), (unsigned long)apm->GetTotalSucceeded(), 
+		(unsigned long)apm->GetTotalExecuteException(), (unsigned long)apm->GetTotalCallbackError());
 
 	StatisticProcInfoMap infoMap;
 	apm->GetStatisticInfos(infoMap);
 	for (StatisticProcInfoMap::iterator it = infoMap.begin(); it != infoMap.end(); ++it)
 	{
-		printf("\"%s\": count=%lu/%lu (%luok, %luerr, %luoverflow), cost=%.2f (%.2f-%.2f)\n",
-			it->first.c_str(), (unsigned long)it->second.countDone(), (unsigned long)it->second.countScheduled,
-			(unsigned long)it->second.countFinish, (unsigned long)it->second.countException, (unsigned long)it->second.countOverflowed,
-			it->second.costSecondsAverage(), it->second.costSecondsMin, it->second.costSecondsMax);
+		printf("\n\"%s\":\n\ttotal=%lu, drop=%lu, finish=%lu/%lu(%lu.ok, %lu.exc, %lu.err)\n\twait=%.2f(%.2f-%.2f), execute=%.2f(%.2f-%.2f), callback=%.2f(%.2f-%.2f)\n",
+			it->first.c_str(), (unsigned long)it->second.countScheduled, (unsigned long)it->second.countOverflowed, (unsigned long)it->second.countFinish(), (unsigned long)it->second.countQueue(),
+			(unsigned long)it->second.countSuccess, (unsigned long)it->second.countExecuteException, (unsigned long)it->second.countCallbackError,
+			it->second.queueSecondsAverage(), it->second.queueSecondsMin, it->second.queueSecondsMax,
+			it->second.executeSecondsAverage(), it->second.executeSecondsMin, it->second.executeSecondsMax,
+			it->second.callbackSecondsAverage(), it->second.callbackSecondsMin, it->second.callbackSecondsMax);
 	}
 	printf("------------------------------------------------------------\n");
 }
 
 #if defined(_WIN32) || defined(_WIN64)
-DWORD WINAPI CycleThreadProc(PVOID arg)
+DWORD WINAPI TickThreadProc(PVOID arg)
 #elif defined(__LINUX__)
-void* CycleThreadProc(void* arg)
+void* TickThreadProc(void* arg)
 #endif	
 {
-	char* name = (char*)arg;
+	int* index = (int*)arg;
 	clock_t nextClock = clock();
+
+	char name[64] = { 0 };
+	sprintf(name, "proc-%d", *index);
 
 	while (aliveTick)
 	{
@@ -155,13 +178,14 @@ void* CycleThreadProc(void* arg)
 		clock_t curClock = clock();
 		if (autoSchedule && nextClock <= curClock)
 		{
-			Schedule(name);
+			int priority = PROC_PRIORITY_RANDOM ? (rand() % PROC_PRIORITY_RANGE) : *index;
+			Schedule(name, priority);
 			nextClock = curClock + (clock_t)(RangeRand(AUTO_SCHEDULE_SECONDS_MIN, AUTO_SCHEDULE_SECONDS_MAX) * CLOCKS_PER_SEC);
 		}
 		apm->Tick();
 	}
 
-	delete name;
+	delete index;
 	return 0;
 }
 
@@ -178,8 +202,14 @@ void* InfoThreadProc(void* arg)
 #elif defined(__LINUX__)
 		usleep(ECHO_SLEEP_MILLISECONDS * 1000);
 #endif
-		printf("activeThread: %lu/%lu, waitQueue: %lu, callbackSize: %lu\n", (unsigned long)apm->GetActiveThreadCount(),
-			(unsigned long)apm->GetThreadCount(), (unsigned long)apm->GetWaitDequeSize(), (unsigned long)apm->GetCallbackSize());
+		if (!autoInfo)
+			continue;
+
+		printf("threads: %lu/%lu, procs: wait=%lu, drop=%lu, finish=%lu/%lu, callback=%lu\n", 
+			(unsigned long)apm->GetActiveThreadCount(), (unsigned long)apm->GetThreadCount(), 
+			(unsigned long)apm->GetWaitDequeSize(), (unsigned long)apm->GetTotalOverflowed(), 
+			(unsigned long)apm->GetTotalFinishCount(), (unsigned long)apm->GetTotalQueuedCount(),
+			(unsigned long)apm->GetCallbackSize());
 	}
 
 	return 0;
@@ -187,43 +217,73 @@ void* InfoThreadProc(void* arg)
 
 int main()
 {
-	printf(
-		"\n======================================================================\n"
-		"<any char> = manual shedule\n"
-		"'t' = manual tick\n"
-		"'o' = auto schedule on\n"
-		"'f' = auto schedule off\n"
-		"'q' = fast quit\n"
-		"'e' = normal quit\n"
-		"'s' = statistic\n"
-		"======================================================================\n\n"
-	);
-
 	srand(clock());
 	apm = new StatisticProcManager();
+	if (NULL == apm)
+	{
+		printf("Initialize apm failed: Not enough memory!\n");
+		return 0;
+	}
 	apm->Startup(WORK_THREAD_COUNT, MAX_WAIT_SIZE);
+
 	aliveTick = true;
 	aliveInfo = true;
 	infoClock = clock();
 
 	for (int i = 0; i < TICK_THREAD_COUNT; ++i)
 	{
-		char* name = new char[32];
-		name[0] = '\0';
-		sprintf(name, "auto-%d", i);
+		int* index = new int(i);
+		if (NULL == index)
+		{
+			printf("Initialize tick thread(%d) failed: Not enough memory!\n", tickThreadCount);
+			break;
+		}
 
 #if defined(_WIN32) || defined(_WIN64)
-		cycleHandle[i] = CreateThread(NULL, 0, CycleThreadProc, (PVOID)name, 0, &cycleThreadId[i]);
+		cycleHandle[i] = CreateThread(NULL, 0, TickThreadProc, (PVOID)index, 0, &cycleThreadId[i]);
+		if (NULL == cycleHandle[i])
+		{
+			printf("Create tick thread(%d) failed!\n", tickThreadCount);
+			delete index;
+			break;
+		}
 #elif defined(__LINUX__)
-		pthread_create(&cycleThreadId[i], NULL, CycleThreadProc, (void*)name);
+		int ptcRet = pthread_create(&cycleThreadId[i], NULL, TickThreadProc, (void*)index);
+		if(ptcRet != 0)
+		{
+			printf("Create tick thread(%d) failed!\n", tickThreadCount);
+			delete index;
+			break;
+		}
 #endif
+
+		++tickThreadCount;
 	}
 
 #if defined(_WIN32) || defined(_WIN64)
 	infoHandle = CreateThread(NULL, 0, InfoThreadProc, (PVOID)0, 0, &infoThreadId);
+	if (NULL == infoHandle)
+		printf("Create info thread(%d) failed!\n", tickThreadCount);
 #elif defined(__LINUX__)
-	pthread_create(&infoThreadId, NULL, InfoThreadProc, (void*)0);
+	infoThreadCreateRet = pthread_create(&infoThreadId, NULL, InfoThreadProc, (void*)0);
+	if (infoThreadCreateRet != 0)
+		printf("Create info thread(%d) failed!\n", tickThreadCount);
 #endif
+
+	printf(
+		"\n======================================================================\n"
+		"<any char> = manual shedule\n"
+		"'t' = add thread\n"
+		"'m' = manual tick\n"
+		"'o' = auto schedule on\n"
+		"'f' = auto schedule off\n"
+		"'i' = auto info on\n"
+		"'c' = auto info off\n"
+		"'s' = statistic\n"
+		"'q' = fast quit\n"
+		"'e' = normal quit\n"
+		"======================================================================\n\n"
+	);
 
 	while (aliveTick)
 	{
@@ -233,6 +293,13 @@ int main()
 		case '\n':
 			break;
 		case 't':
+			{
+				int count = RangeRand(ADD_WORK_THREAD_COUNT_MIN, ADD_WORK_THREAD_COUNT_MAX);
+				for(int i = 0; i < count; ++i)
+					apm->AddThread();
+			}
+			break;
+		case 'm':
 			apm->Tick();
 			break;
 		case 'o':
@@ -240,6 +307,15 @@ int main()
 			break;
 		case 'f':
 			autoSchedule = false;
+			break;
+		case 'i':
+			autoInfo = true;
+			break;
+		case 'c':
+			autoInfo = false;
+			break;
+		case 's':
+			ShowStatistics();
 			break;
 		case 'e':
 			aliveTick = false;
@@ -251,20 +327,17 @@ int main()
 			fastQuit = true;
 			printf("exiting(fast)...\n");
 			break;
-		case 's':
-			ShowStatistics();
-			break;
 		default:
 		{
 			char name[16] = { 0 };
 			sprintf(name, "manual-%c", c);
-			Schedule(name);
+			Schedule(name, 0);
 		}
 		break;
 		}
 	}
 
-	for (int i = 0; i < TICK_THREAD_COUNT; ++i)
+	for (int i = 0; i < tickThreadCount; ++i)
 	{
 #if defined(_WIN32) || defined(_WIN64)
 		WaitForSingleObject(cycleHandle[i], INFINITE);
@@ -280,10 +353,14 @@ int main()
 
 	aliveInfo = false;
 #if defined(_WIN32) || defined(_WIN64)
-	WaitForSingleObject(infoHandle, INFINITE);
-	CloseHandle(infoHandle);
+	if (infoHandle != NULL)
+	{
+		WaitForSingleObject(infoHandle, INFINITE);
+		CloseHandle(infoHandle);
+	}
 #elif defined(__LINUX__)
-	pthread_join(infoThreadId, NULL);
+	if(0 == infoThreadCreateRet)
+		pthread_join(infoThreadId, NULL);
 #endif	
 
 	delete apm;
