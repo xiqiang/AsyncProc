@@ -263,11 +263,11 @@ int main()
 #if defined(_WIN32) || defined(_WIN64)
 	infoHandle = CreateThread(NULL, 0, InfoThreadProc, (PVOID)0, 0, &infoThreadId);
 	if (NULL == infoHandle)
-		printf("Create info thread(%d) failed!\n", tickThreadCount);
+		printf("Create info thread failed!\n");
 #elif defined(__LINUX__)
 	infoThreadCreateRet = pthread_create(&infoThreadId, NULL, InfoThreadProc, (void*)0);
 	if (infoThreadCreateRet != 0)
-		printf("Create info thread(%d) failed!\n", tickThreadCount);
+		printf("Create info thread failed!\n");
 #endif
 
 	printf(
