@@ -23,7 +23,7 @@ void AsyncProcManager::Startup(int threadCount /*= 1*/, size_t maxWaitSize /*= 6
 
 	assert(threadCount > 0);
 	assert(maxWaitSize > 0);
-	m_maxWaitSize = maxWaitSize;
+	SetMaxWaitSize(maxWaitSize);
 
 	for (int t = 0; t < threadCount; ++t)
 		AddThread();

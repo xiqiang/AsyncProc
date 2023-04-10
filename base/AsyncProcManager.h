@@ -43,7 +43,16 @@ public:
 	bool AddThread();
 
 public:
-	size_t GetCallbackSize() {
+	void SetMaxWaitSize(size_t maxWaitSize) {
+		AutoMutex am(m_waitQueueMutex);
+		m_maxWaitSize = maxWaitSize;
+	}
+
+	size_t GetMaxWaitSize() const {
+		return m_maxWaitSize;								// No need lock for outside use.
+	}
+
+	size_t GetCallbackSize() const {
 		return m_callbackSize;
 	}
 

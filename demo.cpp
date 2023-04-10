@@ -15,19 +15,22 @@
 #include "statistic/StatisticProc.h"
 #include "statistic/StatisticProcManager.h"
 
-const int	WORK_THREAD_COUNT = 1024;
-const int	TICK_THREAD_COUNT = 1024;
-const int	MAX_WAIT_SIZE = 200000;
+const int	WORK_THREAD_COUNT = 512;
+const int	TICK_THREAD_COUNT = 256;
+const int	MAX_WAIT_SIZE = 20000;
 
-const int	ADD_WORK_THREAD_COUNT_MIN = 1;
-const int	ADD_WORK_THREAD_COUNT_MAX = 4;
+const int	ADD_WORK_THREAD_COUNT_MIN = 0;
+const int	ADD_WORK_THREAD_COUNT_MAX = 8;
+
+const int	ADD_QUEUE_COUNT_MIN = 100;
+const int	ADD_QUEUE_COUNT_MAX = 1000;
 
 const int	AUTO_SCHEDULE_SLEEP_MILLISECONDS = 10;
 const float AUTO_SCHEDULE_SECONDS_MIN = 0.0f;
 const float AUTO_SCHEDULE_SECONDS_MAX = 1.0f;
 
-const int	NEW_PROC_COUNT_MIN = 1;
-const int	NEW_PROC_COUNT_MAX = 3;
+const int	NEW_PROC_COUNT_MIN = 0;
+const int	NEW_PROC_COUNT_MAX = 4;
 
 const float	PROC_SLEEP_SECONDS_MIN = 0.0f;
 const float	PROC_SLEEP_SECONDS_MAX = 1.0f;
@@ -62,6 +65,7 @@ public:
 	}
 
 private:
+	int m_buff[1024];
 	float m_duration;
 	float m_errRatio;
 };
@@ -115,61 +119,66 @@ void demoProcCallback(const AsyncProcResult& result)
 
 void Schedule(const char* name, int priority)
 {
-	try {
-		int count = RangeRand(NEW_PROC_COUNT_MIN, NEW_PROC_COUNT_MAX);
-		for (int i = 0; i < count; ++i) {
-			float duration = RangeRand(PROC_SLEEP_SECONDS_MIN, PROC_SLEEP_SECONDS_MAX);
+	int count = RangeRand(NEW_PROC_COUNT_MIN, NEW_PROC_COUNT_MAX);
+	for (int i = 0; i < count; ++i) {
+		float duration = RangeRand(PROC_SLEEP_SECONDS_MIN, PROC_SLEEP_SECONDS_MAX);
 
-			DemoProc* proc = new DemoProc(name, duration, PROC_ERROR_RATIO);
+		DemoProc* proc = NULL;
+
+		try {
+			proc = new DemoProc(name, duration, PROC_ERROR_RATIO);
 			if (!proc)
 				return;
-
-			proc->SetPriority(priority);
-			if (rand() / (float)RAND_MAX < PROC_HAS_CALLBACK_RATIO) {
-				if (rand() / (float)RAND_MAX < PROC_MEMFUNC_CALLBACK_RATIO)
-					apm->Schedule(proc, &mft, &MemFuncType::OnProcCallback);
-				else
-					apm->Schedule(proc, demoProcCallback);
-			}
-			else {
-				apm->Schedule(proc);
-			}
+		} catch (std::bad_alloc&) {
+			autoSchedule = false;
+			printf("\nNot enough memory! autoSchedule stopped.\n");
+			return;
 		}
-	}
-	catch (std::bad_alloc&) {
-		autoSchedule = false;
-		printf("\nNot enough memory! autoSchedule stopped.\n");
+
+		proc->SetPriority(priority);
+		if (rand() / (float)RAND_MAX < PROC_HAS_CALLBACK_RATIO) {
+			if (rand() / (float)RAND_MAX < PROC_MEMFUNC_CALLBACK_RATIO)
+				apm->Schedule(proc, &mft, &MemFuncType::OnProcCallback);
+			else
+				apm->Schedule(proc, demoProcCallback);
+		}
+		else {
+			apm->Schedule(proc);
+		}
 	}
 }
 
 void ShowStatistics()
 {
-	printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-	printf("threads: active=%lu/%lu\n", 
+	printf("------------------------------------------------------------\nthreads: active=%lu/%lu\n{\n", 
 		(unsigned long)apm->GetActiveThreadCount(), (unsigned long)apm->GetThreadCount());
 
 	WorkingNameMap workingNameMap;
 	apm->GetWorkingNameMap(workingNameMap);
 	for (WorkingNameMap::iterator it = workingNameMap.begin(); it != workingNameMap.end(); ++it)
-		printf("thread[%lu].proc: \"%s\"\n", (unsigned long)it->first, it->second.c_str());
+		printf("\t%lu.proc: \"%s\"\n", (unsigned long)it->first, it->second.c_str());
+	printf("}\n");
 
-	printf("\nprocs:\ttotal=%lu, wait=%lu, drop=%lu, finish=%lu/%lu(%lu.ok, %lu.exc, %lu.err)\n", 
-		(unsigned long)apm->GetTotalScheduled(), (unsigned long)apm->GetWaitDequeSize(), (unsigned long)apm->GetTotalOverflowed(), 
-		(unsigned long)apm->GetTotalFinishCount(), (unsigned long)apm->GetTotalQueuedCount(), (unsigned long)apm->GetTotalSucceeded(), 
-		(unsigned long)apm->GetTotalExecuteException(), (unsigned long)apm->GetTotalCallbackError());
+	printf("\nprocs:\ttotal=%lu, wait=%lu/%lu, drop=%lu, finish=%lu/%lu(%lu.ok, %lu.exc, %lu.err)\n{\n",
+		(unsigned long)apm->GetTotalScheduled(), (unsigned long)apm->GetWaitDequeSize(), (unsigned long)apm->GetMaxWaitSize(),
+		(unsigned long)apm->GetTotalOverflowed(),(unsigned long)apm->GetTotalFinishCount(), (unsigned long)apm->GetTotalQueuedCount(),
+		(unsigned long)apm->GetTotalSucceeded(), (unsigned long)apm->GetTotalExecuteException(), (unsigned long)apm->GetTotalCallbackError());
 
 	StatisticProcInfoMap infoMap;
 	apm->GetStatisticInfos(infoMap);
 	for (StatisticProcInfoMap::iterator it = infoMap.begin(); it != infoMap.end(); ++it)
 	{
-		printf("\n\"%s\":\n\ttotal=%lu, drop=%lu, finish=%lu/%lu(%lu.ok, %lu.exc, %lu.err)\n\twait=%.2f(%.2f-%.2f), execute=%.2f(%.2f-%.2f), callback=%.2f(%.2f-%.2f)\n",
+		if(it != infoMap.begin())
+			printf("\n");
+
+		printf("\t\"%s\":\n\t\ttotal=%lu, drop=%lu, finish=%lu/%lu(%lu.ok, %lu.exc, %lu.err)\n\t\twait=%.2f(%.2f-%.2f), execute=%.2f(%.2f-%.2f), callback=%.2f(%.2f-%.2f)\n",
 			it->first.c_str(), (unsigned long)it->second.countScheduled, (unsigned long)it->second.countOverflowed, (unsigned long)it->second.countFinish(), (unsigned long)it->second.countQueue(),
 			(unsigned long)it->second.countSuccess, (unsigned long)it->second.countExecuteException, (unsigned long)it->second.countCallbackError,
 			it->second.queueSecondsAverage(), it->second.queueSecondsMin, it->second.queueSecondsMax,
 			it->second.executeSecondsAverage(), it->second.executeSecondsMin, it->second.executeSecondsMax,
 			it->second.callbackSecondsAverage(), it->second.callbackSecondsMin, it->second.callbackSecondsMax);
 	}
-	printf("------------------------------------------------------------\n");
+	printf("}\n");
 }
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -221,11 +230,11 @@ void* InfoThreadProc(void* arg)
 		if (!autoInfo)
 			continue;
 
-		printf("threads: %lu/%lu, procs: wait=%lu, drop=%lu, finish=%lu/%lu, callback=%lu\n", 
-			(unsigned long)apm->GetActiveThreadCount(), (unsigned long)apm->GetThreadCount(), 
-			(unsigned long)apm->GetWaitDequeSize(), (unsigned long)apm->GetTotalOverflowed(), 
-			(unsigned long)apm->GetTotalFinishCount(), (unsigned long)apm->GetTotalQueuedCount(),
-			(unsigned long)apm->GetCallbackSize());
+		printf("threads: %lu/%lu, procs: wait=%lu/%lu, drop=%lu, finish=%lu/%lu, callback=%lu\n",
+			(unsigned long)apm->GetActiveThreadCount(), (unsigned long)apm->GetThreadCount(),
+			(unsigned long)apm->GetWaitDequeSize(), (unsigned long)apm->GetMaxWaitSize(),
+			(unsigned long)apm->GetTotalOverflowed(), (unsigned long)apm->GetTotalFinishCount(),
+			(unsigned long)apm->GetTotalQueuedCount(), (unsigned long)apm->GetCallbackSize());
 	}
 
 	return 0;
@@ -289,14 +298,16 @@ int main()
 	printf(
 		"\n======================================================================\n"
 		"<any char> = manual shedule\n"
-		"'t' = add thread\n"
+		"'t' = add working thread\n"
+		"'p' = dec wait size\n"
+		"'q' = inc wait size\n"
 		"'m' = manual tick\n"
 		"'o' = auto schedule on\n"
 		"'f' = auto schedule off\n"
 		"'i' = auto info on\n"
 		"'c' = auto info off\n"
 		"'s' = statistic\n"
-		"'q' = fast quit\n"
+		"'d' = fast quit\n"
 		"'e' = normal quit\n"
 		"======================================================================\n\n"
 	);
@@ -313,6 +324,18 @@ int main()
 				int count = RangeRand(ADD_WORK_THREAD_COUNT_MIN, ADD_WORK_THREAD_COUNT_MAX);
 				for(int i = 0; i < count; ++i)
 					apm->AddThread();
+			}
+			break;
+		case 'p':
+			{
+				int count = RangeRand(ADD_QUEUE_COUNT_MIN, ADD_QUEUE_COUNT_MAX);
+				apm->SetMaxWaitSize((int)apm->GetMaxWaitSize() - count);
+			}
+			break;
+		case 'q':
+			{
+				int count = RangeRand(ADD_QUEUE_COUNT_MIN, ADD_QUEUE_COUNT_MAX);
+				apm->SetMaxWaitSize((int)apm->GetMaxWaitSize() + count);
 			}
 			break;
 		case 'm':
@@ -338,7 +361,7 @@ int main()
 			fastQuit = false;
 			printf("exiting(normal)...\n");
 			break;
-		case 'q':
+		case 'd':
 			aliveTick = false;
 			fastQuit = true;
 			printf("exiting(fast)...\n");
