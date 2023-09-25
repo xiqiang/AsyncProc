@@ -2,6 +2,7 @@
 #define AsyncProc_H_Xiqiang_20190907
 
 #include <time.h>
+#include <set>
 #include "AsyncProcDef.h"
 
 struct AsyncProcResult;
@@ -110,11 +111,11 @@ private:
 
 struct AsyncProcLess
 {
-	bool operator()(AsyncProc* l, AsyncProc* r) {
-		return l->GetPriority() < r->GetPriority();
+	bool operator()(AsyncProc* l, AsyncProc* r) const {
+		return l->GetPriority() > r->GetPriority();
 	}
 };
 
-typedef std::priority_queue<AsyncProc*, std::deque<AsyncProc*>, AsyncProcLess> ProcPriorityQueue;
+typedef std::multiset<AsyncProc*, AsyncProcLess> ProcMultiset;
 
 #endif

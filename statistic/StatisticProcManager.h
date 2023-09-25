@@ -15,7 +15,8 @@ public:
 
 public:
 	virtual void OnProcScheduled(AsyncProc* proc);
-	virtual void OnProcOverflowed(AsyncProc* proc);
+	virtual void OnProcBlocked(AsyncProc* proc);
+	virtual void OnProcDropped(AsyncProc* proc);
 	virtual void OnProcDone(const AsyncProcResult& result);
 
 	virtual void OnThreadSleep(AP_Thread thread_id);							// NOTICE: under m_waitQueueMutex be locked outside
@@ -26,14 +27,15 @@ public:
 	void GetWorkingNameMap(WorkingNameMap& outInfoMap);
 
 	size_t GetTotalScheduled() const { return m_totalScheduled; }
-	size_t GetTotalOverflowed() const { return m_totalOverflowed; }
+	size_t GetTotalBlocked() const { return m_totalBlocked; }
+	size_t GetTotalDropped() const { return m_totalDropped; }
 
 	size_t GetTotalSucceeded() const { return m_totalSuccess; }
 	size_t GetTotalExecuteException() const { return m_totalExecuteException; }
 	size_t GetTotalCallbackError() const { return m_totalCallbackError; }
 
 	size_t GetTotalQueuedCount() {
-		return m_totalScheduled - m_totalOverflowed;
+		return m_totalScheduled - m_totalDropped;
 	}
 
 	size_t GetTotalFinishCount() {
@@ -51,7 +53,8 @@ private:
 	Mutex					m_workingProcMapMutex;
 
 	size_t					m_totalScheduled;
-	size_t					m_totalOverflowed;
+	size_t					m_totalBlocked;
+	size_t					m_totalDropped;
 
 	size_t					m_totalSuccess;
 	size_t					m_totalExecuteException;

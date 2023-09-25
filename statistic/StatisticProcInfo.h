@@ -7,7 +7,8 @@ struct StatisticProcInfo
 {
 	StatisticProcInfo() 
 		: countScheduled(0)
-		, countOverflowed(0)
+		, countBlocked(0)
+		, countDropped(0)
 		, countSuccess(0)
 		, countExecuteException(0)
 		, countCallbackError(0)
@@ -30,7 +31,7 @@ struct StatisticProcInfo
 	}
 
 	inline size_t countQueue() const {
-		return countScheduled - countOverflowed;
+		return countScheduled - countDropped;
 	}
 
 	inline float queueSecondsAverage() const {
@@ -46,7 +47,8 @@ struct StatisticProcInfo
 	}
 
 	size_t countScheduled;
-	size_t countOverflowed;
+	size_t countBlocked;
+	size_t countDropped;
 
 	size_t countSuccess;
 	size_t countExecuteException;

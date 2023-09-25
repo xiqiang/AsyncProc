@@ -64,25 +64,38 @@ bool AsyncProcManager::Schedule(AsyncProc* proc)
 	proc->Init(AP_GetThreadId());
 	OnProcScheduled(proc);
 
-	bool overflow = false;
+	if (BlockCheck(proc))
+	{
+		OnProcBlocked(proc);
+		delete proc;
+		return false;
+	}
+
+	AsyncProc* dropProc = proc;
+
 	try
 	{
 		AutoMutex am(m_waitQueueMutex);
-		if (m_waitQueue.size() < m_maxWaitSize)
-			m_waitQueue.push(proc);
-		else
-			overflow = true;
+		m_waitQueue.insert(proc);
+		dropProc = NULL;
+
+		if (m_waitQueue.size() > m_maxWaitSize)
+		{
+			ProcMultiset::iterator it = --m_waitQueue.end();
+			dropProc = *it;
+			m_waitQueue.erase(it);
+		}
 	}
 	catch (std::bad_alloc&)
 	{
-		overflow = true;
 	}
 
-	if (overflow)
+	if (dropProc)
 	{
-		OnProcOverflowed(proc);
-		delete proc;
-		return false;
+		OnProcDropped(dropProc);
+		delete dropProc;
+		if (dropProc == proc)
+			return false;
 	}
 
 	m_procCondition.Wake();
@@ -242,12 +255,12 @@ void AsyncProcManager::_ClearProcs(void)
 
 	{
 		AutoMutex am(m_waitQueueMutex);
-		while (!m_waitQueue.empty())
+		for (ProcMultiset::iterator it = m_waitQueue.begin();
+			it != m_waitQueue.end(); ++it)
 		{
-			AsyncProc* proc = m_waitQueue.top();
-			delete proc;
-			m_waitQueue.pop();
+			delete* it;
 		}
+		m_waitQueue.clear();
 	}
 
 	{

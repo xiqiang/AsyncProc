@@ -3,7 +3,8 @@
 
 StatisticProcManager::StatisticProcManager()
 	: m_totalScheduled(0)
-	, m_totalOverflowed(0)
+	, m_totalBlocked(0)
+	, m_totalDropped(0)
 	, m_totalSuccess(0)
 	, m_totalExecuteException(0)
 	, m_totalCallbackError(0)
@@ -24,17 +25,30 @@ void StatisticProcManager::OnProcScheduled(AsyncProc* proc)
 		++spi->countScheduled;
 }
 
-void StatisticProcManager::OnProcOverflowed(AsyncProc* proc)
+void StatisticProcManager::OnProcBlocked(AsyncProc* proc)
 {
 	StatisticProc* sProc = dynamic_cast<StatisticProc*>(proc);
 	assert(sProc);
 
 	AutoMutex am(m_infoMapMutex);
-	++m_totalOverflowed;
+	++m_totalBlocked;
 
 	StatisticProcInfo* spi = ObtainInfo(sProc->GetName());
 	if (spi)
-		++spi->countOverflowed;
+		++spi->countBlocked;
+}
+
+void StatisticProcManager::OnProcDropped(AsyncProc* proc)
+{
+	StatisticProc* sProc = dynamic_cast<StatisticProc*>(proc);
+	assert(sProc);
+
+	AutoMutex am(m_infoMapMutex);
+	++m_totalDropped;
+
+	StatisticProcInfo* spi = ObtainInfo(sProc->GetName());
+	if (spi)
+		++spi->countDropped;
 }
 
 void StatisticProcManager::OnProcDone(const AsyncProcResult& result)

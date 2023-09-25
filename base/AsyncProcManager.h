@@ -18,12 +18,16 @@ public:
 
 public:
 	virtual void OnProcScheduled(AsyncProc* proc) {}
-	virtual void OnProcOverflowed(AsyncProc* proc) {}
+	virtual void OnProcBlocked(AsyncProc* proc) {}
+	virtual void OnProcDropped(AsyncProc* proc) {}
 	virtual void OnProcDone(const AsyncProcResult& result) {}
 	
 	virtual void OnThreadAwake(AP_Thread thread_id) {}							// NOTICE: under m_waitQueueMutex be locked outside
 	virtual void OnThreadSleep(AP_Thread thread_id) {}							// NOTICE: under m_waitQueueMutex be locked outside
 	virtual void OnThreadPickWork(AP_Thread thread_id, AsyncProc* proc) {}
+
+protected:
+	virtual bool BlockCheck(AsyncProc* proc) { return false; }
 
 public:
 	void Startup(int threadCount = 4, size_t maxWaitSize = 65535);
@@ -74,7 +78,7 @@ public:
 protected:
 	ResultDeque* GetCallbackDeque(AP_Thread thread_id, bool autoCreate);
 
-	ProcPriorityQueue& GetWaitDeque(void) {
+	ProcMultiset& GetWaitDeque(void) {
 		return m_waitQueue;									// m_waitQueueMutex must be locked outside
 	}
 
@@ -105,7 +109,7 @@ private:
 	ThreadVector		m_threads;
 	Mutex				m_threadMutex;
 
-	ProcPriorityQueue	m_waitQueue;
+	ProcMultiset		m_waitQueue;
 	Mutex				m_waitQueueMutex;
 	Condition			m_procCondition;
 

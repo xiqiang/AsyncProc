@@ -92,7 +92,7 @@ void AsyncProcThread::_Execute()
 	{
 		{
 			AutoMutex am(m_manager->GetWaitDequeMutex());
-			ProcPriorityQueue& waitDeque = m_manager->GetWaitDeque();
+			ProcMultiset& waitDeque = m_manager->GetWaitDeque();
 
 			switch (m_state)
 			{
@@ -122,8 +122,9 @@ void AsyncProcThread::_Execute()
 				continue;
 			}
 
-			m_proc = waitDeque.top();
-			waitDeque.pop();
+			ProcMultiset::iterator it = waitDeque.begin();
+			m_proc = *it;
+			waitDeque.erase(it);
 			assert(m_proc);
 		}
 

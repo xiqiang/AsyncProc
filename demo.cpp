@@ -16,8 +16,8 @@
 #include "statistic/StatisticProcManager.h"
 
 const int	WORK_THREAD_COUNT = 512;
-const int	TICK_THREAD_COUNT = 256;
-const int	MAX_WAIT_SIZE = 20000;
+const int	TICK_THREAD_COUNT = 512;
+const int	MAX_WAIT_SIZE = 200000;
 
 const int	ADD_WORK_THREAD_COUNT_MIN = 0;
 const int	ADD_WORK_THREAD_COUNT_MAX = 8;
@@ -27,17 +27,17 @@ const int	ADD_QUEUE_COUNT_MAX = 1000;
 
 const int	AUTO_SCHEDULE_SLEEP_MILLISECONDS = 10;
 const float AUTO_SCHEDULE_SECONDS_MIN = 0.0f;
-const float AUTO_SCHEDULE_SECONDS_MAX = 1.0f;
+const float AUTO_SCHEDULE_SECONDS_MAX = 0.3f;
 
 const int	NEW_PROC_COUNT_MIN = 0;
 const int	NEW_PROC_COUNT_MAX = 4;
 
 const float	PROC_SLEEP_SECONDS_MIN = 0.0f;
-const float	PROC_SLEEP_SECONDS_MAX = 1.0f;
+const float	PROC_SLEEP_SECONDS_MAX = 0.3f;
 const float PROC_HAS_CALLBACK_RATIO = 0.5f;
 const float PROC_MEMFUNC_CALLBACK_RATIO = 0.5f;
 const float PROC_ERROR_RATIO = 0.5f;
-const float PROC_SORT_RATIO = 0.f;
+const float PROC_BLOCK_RATIO = 0.5f;
 
 const bool	PROC_PRIORITY_RANDOM = false;
 const int	PROC_PRIORITY_RANGE = 10000;
@@ -79,6 +79,11 @@ public:
 	}
 };
 
+class DemoProcManager : public StatisticProcManager {
+protected:
+	virtual bool BlockCheck(AsyncProc* proc) { return rand() / (float)RAND_MAX < PROC_BLOCK_RATIO; }
+};
+
 #if defined(_WIN32) || defined(_WIN64)
 DWORD cycleThreadId[TICK_THREAD_COUNT];
 HANDLE cycleHandle[TICK_THREAD_COUNT];
@@ -90,7 +95,7 @@ pthread_t infoThreadId;
 int infoThreadCreateRet;
 #endif
 
-StatisticProcManager* apm = NULL;
+DemoProcManager* apm = NULL;
 MemFuncType mft;
 int tickThreadCount = 0;
 bool aliveTick = false;
@@ -159,10 +164,11 @@ void ShowStatistics()
 		printf("\t%lu.proc: \"%s\"\n", (unsigned long)it->first, it->second.c_str());
 	printf("}\n");
 
-	printf("\nprocs:\ttotal=%lu, wait=%lu/%lu, drop=%lu, finish=%lu/%lu(%lu.ok, %lu.exc, %lu.err)\n{\n",
+	printf("\nprocs:\ttotal=%lu, wait=%lu/%lu, block=%lu, drop=%lu, finish=%lu/%lu(%lu.ok, %lu.exc, %lu.err)\n{\n",
 		(unsigned long)apm->GetTotalScheduled(), (unsigned long)apm->GetWaitDequeSize(), (unsigned long)apm->GetMaxWaitSize(),
-		(unsigned long)apm->GetTotalOverflowed(),(unsigned long)apm->GetTotalFinishCount(), (unsigned long)apm->GetTotalQueuedCount(),
-		(unsigned long)apm->GetTotalSucceeded(), (unsigned long)apm->GetTotalExecuteException(), (unsigned long)apm->GetTotalCallbackError());
+		(unsigned long)apm->GetTotalBlocked(), (unsigned long)apm->GetTotalDropped(), (unsigned long)apm->GetTotalFinishCount(), 
+		(unsigned long)apm->GetTotalQueuedCount(), (unsigned long)apm->GetTotalSucceeded(), 
+		(unsigned long)apm->GetTotalExecuteException(), (unsigned long)apm->GetTotalCallbackError());
 
 	StatisticProcInfoMap infoMap;
 	apm->GetStatisticInfos(infoMap);
@@ -171,8 +177,9 @@ void ShowStatistics()
 		if(it != infoMap.begin())
 			printf("\n");
 
-		printf("\t\"%s\":\n\t\ttotal=%lu, drop=%lu, finish=%lu/%lu(%lu.ok, %lu.exc, %lu.err)\n\t\twait=%.2f(%.2f-%.2f), execute=%.2f(%.2f-%.2f), callback=%.2f(%.2f-%.2f)\n",
-			it->first.c_str(), (unsigned long)it->second.countScheduled, (unsigned long)it->second.countOverflowed, (unsigned long)it->second.countFinish(), (unsigned long)it->second.countQueue(),
+		printf("\t\"%s\":\n\t\ttotal=%lu, block=%lu, drop=%lu, finish=%lu/%lu(%lu.ok, %lu.exc, %lu.err)\n\t\twait=%.2f(%.2f-%.2f), execute=%.2f(%.2f-%.2f), callback=%.2f(%.2f-%.2f)\n",
+			it->first.c_str(), (unsigned long)it->second.countScheduled, (unsigned long)it->second.countBlocked, (unsigned long)it->second.countDropped, 
+			(unsigned long)it->second.countFinish(), (unsigned long)it->second.countQueue(), 
 			(unsigned long)it->second.countSuccess, (unsigned long)it->second.countExecuteException, (unsigned long)it->second.countCallbackError,
 			it->second.queueSecondsAverage(), it->second.queueSecondsMin, it->second.queueSecondsMax,
 			it->second.executeSecondsAverage(), it->second.executeSecondsMin, it->second.executeSecondsMax,
@@ -191,7 +198,7 @@ void* TickThreadProc(void* arg)
 	clock_t nextClock = clock();
 
 	char name[64] = { 0 };
-	sprintf(name, "proc-%d", *index);
+	sprintf(name, "proc-%.4d", *index);
 
 	while (aliveTick)
 	{
@@ -230,11 +237,12 @@ void* InfoThreadProc(void* arg)
 		if (!autoInfo)
 			continue;
 
-		printf("threads: %lu/%lu, procs: wait=%lu/%lu, drop=%lu, finish=%lu/%lu, callback=%lu\n",
+		printf("threads: %lu/%lu, procs: wait=%lu/%lu, block=%lu, drop=%lu, finish=%lu/%lu, callback=%lu\n",
 			(unsigned long)apm->GetActiveThreadCount(), (unsigned long)apm->GetThreadCount(),
 			(unsigned long)apm->GetWaitDequeSize(), (unsigned long)apm->GetMaxWaitSize(),
-			(unsigned long)apm->GetTotalOverflowed(), (unsigned long)apm->GetTotalFinishCount(),
-			(unsigned long)apm->GetTotalQueuedCount(), (unsigned long)apm->GetCallbackSize());
+			(unsigned long)apm->GetTotalBlocked(), (unsigned long)apm->GetTotalDropped(), 
+			(unsigned long)apm->GetTotalFinishCount(), (unsigned long)apm->GetTotalQueuedCount(), 
+			(unsigned long)apm->GetCallbackSize());
 	}
 
 	return 0;
@@ -243,7 +251,7 @@ void* InfoThreadProc(void* arg)
 int main()
 {
 	srand(clock());
-	apm = new StatisticProcManager();
+	apm = new DemoProcManager();
 	if (NULL == apm)
 	{
 		printf("Initialize apm failed: Not enough memory!\n");
@@ -322,8 +330,11 @@ int main()
 		case 't':
 			{
 				int count = RangeRand(ADD_WORK_THREAD_COUNT_MIN, ADD_WORK_THREAD_COUNT_MAX);
-				for(int i = 0; i < count; ++i)
-					apm->AddThread();
+				for (int i = 0; i < count; ++i)
+				{
+					if (!apm->AddThread())
+						printf("Add thread failed!\n");
+				}
 			}
 			break;
 		case 'p':
