@@ -38,7 +38,7 @@ void StatisticProcManager::OnProcBlocked(AsyncProc* proc)
 		++spi->countBlocked;
 }
 
-void StatisticProcManager::OnProcDropped(AsyncProc* proc)
+void StatisticProcManager::OnProcDropped(AsyncProc* proc, bool replace)
 {
 	StatisticProc* sProc = dynamic_cast<StatisticProc*>(proc);
 	assert(sProc);

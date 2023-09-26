@@ -16,7 +16,7 @@ public:
 public:
 	virtual void OnProcScheduled(AsyncProc* proc);
 	virtual void OnProcBlocked(AsyncProc* proc);
-	virtual void OnProcDropped(AsyncProc* proc);
+	virtual void OnProcDropped(AsyncProc* proc, bool replace);
 	virtual void OnProcDone(const AsyncProcResult& result);
 
 	virtual void OnThreadSleep(AP_Thread thread_id);							// NOTICE: under m_waitQueueMutex be locked outside
@@ -35,7 +35,7 @@ public:
 	size_t GetTotalCallbackError() const { return m_totalCallbackError; }
 
 	size_t GetTotalQueuedCount() {
-		return m_totalScheduled - m_totalDropped;
+		return m_totalScheduled - m_totalBlocked - m_totalDropped;
 	}
 
 	size_t GetTotalFinishCount() {

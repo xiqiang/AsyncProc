@@ -71,28 +71,38 @@ bool AsyncProcManager::Schedule(AsyncProc* proc)
 		return false;
 	}
 
-	AsyncProc* dropProc = proc;
+	AsyncProc* dropProc = NULL;
 
-	try
 	{
 		AutoMutex am(m_waitQueueMutex);
-		m_waitQueue.insert(proc);
-		dropProc = NULL;
-
-		if (m_waitQueue.size() > m_maxWaitSize)
+		if (!m_waitQueue.empty() && m_waitQueue.size() >= m_maxWaitSize)
 		{
 			ProcMultiset::iterator it = --m_waitQueue.end();
-			dropProc = *it;
-			m_waitQueue.erase(it);
+			if (proc->GetPriority() > (*it)->GetPriority())
+			{
+				dropProc = *it;
+				m_waitQueue.erase(it);
+			}
+			else
+			{
+				dropProc = proc;
+			}
 		}
-	}
-	catch (std::bad_alloc&)
-	{
+
+		try
+		{
+			if (proc != dropProc)
+				m_waitQueue.insert(proc);
+		}
+		catch (std::bad_alloc&)
+		{
+			dropProc = proc;
+		}
 	}
 
 	if (dropProc)
 	{
-		OnProcDropped(dropProc);
+		OnProcDropped(dropProc, dropProc != proc);
 		delete dropProc;
 		if (dropProc == proc)
 			return false;

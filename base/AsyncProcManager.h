@@ -19,7 +19,7 @@ public:
 public:
 	virtual void OnProcScheduled(AsyncProc* proc) {}
 	virtual void OnProcBlocked(AsyncProc* proc) {}
-	virtual void OnProcDropped(AsyncProc* proc) {}
+	virtual void OnProcDropped(AsyncProc* proc, bool replace) {}
 	virtual void OnProcDone(const AsyncProcResult& result) {}
 	
 	virtual void OnThreadAwake(AP_Thread thread_id) {}							// NOTICE: under m_waitQueueMutex be locked outside

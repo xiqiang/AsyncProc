@@ -15,9 +15,9 @@
 #include "statistic/StatisticProc.h"
 #include "statistic/StatisticProcManager.h"
 
-const int	WORK_THREAD_COUNT = 512;
-const int	TICK_THREAD_COUNT = 512;
-const int	MAX_WAIT_SIZE = 200000;
+const int	WORK_THREAD_COUNT = 1024;
+const int	TICK_THREAD_COUNT = 1024;
+const int	MAX_WAIT_SIZE = 20000;
 
 const int	ADD_WORK_THREAD_COUNT_MIN = 0;
 const int	ADD_WORK_THREAD_COUNT_MAX = 8;
@@ -33,7 +33,7 @@ const int	NEW_PROC_COUNT_MIN = 0;
 const int	NEW_PROC_COUNT_MAX = 4;
 
 const float	PROC_SLEEP_SECONDS_MIN = 0.0f;
-const float	PROC_SLEEP_SECONDS_MAX = 0.3f;
+const float	PROC_SLEEP_SECONDS_MAX = 0.5f;
 const float PROC_HAS_CALLBACK_RATIO = 0.5f;
 const float PROC_MEMFUNC_CALLBACK_RATIO = 0.5f;
 const float PROC_ERROR_RATIO = 0.5f;

@@ -31,7 +31,7 @@ struct StatisticProcInfo
 	}
 
 	inline size_t countQueue() const {
-		return countScheduled - countDropped;
+		return countScheduled - countBlocked - countDropped;
 	}
 
 	inline float queueSecondsAverage() const {
