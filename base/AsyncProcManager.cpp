@@ -22,7 +22,6 @@ void AsyncProcManager::Startup(int threadCount /*= 1*/, size_t maxWaitSize /*= 6
 	//printf("AsyncProcManager::Startup(threadCount=%d)\n", threadCount);
 
 	assert(threadCount > 0);
-	assert(maxWaitSize > 0);
 	SetMaxWaitSize(maxWaitSize);
 
 	for (int t = 0; t < threadCount; ++t)
@@ -75,13 +74,20 @@ bool AsyncProcManager::Schedule(AsyncProc* proc)
 
 	{
 		AutoMutex am(m_waitQueueMutex);
-		if (!m_waitQueue.empty() && m_waitQueue.size() >= m_maxWaitSize)
+		if (m_waitQueue.size() >= m_maxWaitSize)
 		{
-			ProcMultiset::iterator it = --m_waitQueue.end();
-			if (proc->GetPriority() > (*it)->GetPriority())
+			if (!m_waitQueue.empty())
 			{
-				dropProc = *it;
-				m_waitQueue.erase(it);
+				ProcMultiset::iterator it = --m_waitQueue.end();
+				if (proc->GetPriority() > (*it)->GetPriority())
+				{
+					dropProc = *it;
+					m_waitQueue.erase(it);
+				}
+				else
+				{
+					dropProc = proc;
+				}
 			}
 			else
 			{
